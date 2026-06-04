@@ -1,16 +1,19 @@
-export module Foundation.Math.Quaternion;
+module;
 
-import <cassert>;
-import <cmath>;
-import <concepts>;
-import <cstddef>;
-import <limits>;
-import <numbers>;
-import <type_traits>;
-import <utility>;
+#include <cassert>
+#include <cmath>
+#include <concepts>
+#include <cstddef>
+#include <limits>
+#include <numbers>
+#include <type_traits>
+#include <utility>
+
+export module Foundation.Math.Quaternion;
 
 import Foundation.Math.Vector;
 import Foundation.Math.Matrix;
+
 
 export namespace foundation::math
 {

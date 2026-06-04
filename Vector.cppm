@@ -1,12 +1,15 @@
+module;
+
+#include <cassert>
+#include <cmath>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <type_traits>
+
 export module Foundation.Math.Vector;
 
-import <cassert>;
-import <cmath>;
-import <concepts>;
-import <cstddef>;
-import <cstdint>;
-import <limits>;
-import <type_traits>;
 
 export namespace foundation::math
 {

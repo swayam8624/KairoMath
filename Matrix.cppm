@@ -1,15 +1,18 @@
+module;
+
+#include <array>
+#include <cassert>
+#include <cmath>
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
+#include <limits>
+#include <type_traits>
+
 export module Foundation.Math.Matrix;
 
-import <array>;
-import <cassert>;
-import <cmath>;
-import <concepts>;
-import <cstddef>;
-import <cstdint>;
-import <limits>;
-import <type_traits>;
-
 import Foundation.Math.Vector;
+
 
 export namespace foundation::math
 {

@@ -1,10 +1,45 @@
-cmake_minimum_required(VERSION 4.2)
-project(Math)
+cmake_minimum_required(VERSION 3.28)
+project(Math LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_library(Math STATIC library.cpp
-        Matrix.cppm
-        Vector.cppm
-        Quaternion.cppm
-        Transform.cppm)
+# Compiler options
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    add_compile_options(-Wall -Wextra -Wno-unused-parameter)
+elseif(MSVC)
+    add_compile_options(/W4)
+endif()
+
+# Create Math static library target
+add_library(Math)
+
+# Configure the C++ Modules File Set
+target_sources(Math
+    PUBLIC
+        FILE_SET CXX_MODULES
+        BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}
+        FILES
+            Vector.cppm
+            Matrix.cppm
+            Quaternion.cppm
+            Transform.cppm
+)
+
+# Catch2 Unit Test Integration
+include(FetchContent)
+FetchContent_Declare(
+    Catch2
+    GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+    GIT_TAG v3.5.4
+)
+FetchContent_MakeAvailable(Catch2)
+
+# MathTests executable
+add_executable(MathTests tests/MathTests.cpp)
+target_link_libraries(MathTests PRIVATE Math Catch2::Catch2WithMain)
+
+# MathVisualizer executable
+add_executable(MathVisualizer tests/VisualTests.cpp)
+target_link_libraries(MathVisualizer PRIVATE Math)

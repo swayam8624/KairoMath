@@ -1,14 +1,17 @@
-export module Foundation.Math.Transform;
+module;
 
-import <cassert>;
-import <cmath>;
-import <concepts>;
-import <limits>;
-import <type_traits>;
+#include <cassert>
+#include <cmath>
+#include <concepts>
+#include <limits>
+#include <type_traits>
+
+export module Foundation.Math.Transform;
 
 import Foundation.Math.Vector;
 import Foundation.Math.Matrix;
 import Foundation.Math.Quaternion;
+
 
 export namespace foundation::math
 {
