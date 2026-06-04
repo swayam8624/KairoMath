@@ -13,6 +13,13 @@ import Foundation.Math.Vector;
 
 export namespace foundation::math
 {
+    // Matrix convention for the whole module:
+    // - Row-major memory layout.
+    // - Column-vector multiplication: result = matrix * vector.
+    // - Transform matrices store translation in the final column.
+    // - Composition order follows column-vector math: A * B * v applies B first.
+    // - Projection helpers use a Vulkan/Metal-friendly depth range of [0, 1].
+
     //=========================================================
     // Forward Declarations
     //=========================================================
@@ -469,9 +476,20 @@ export namespace foundation::math
     constexpr Matrix3<T>& operator/=(Matrix3<T>& matrix, T scalar) noexcept
     {
         assert(scalar != T(0));
-        for (auto& element : matrix.data)
+        if constexpr (FloatingPoint<T>)
         {
-            element /= scalar;
+            const T inverseScalar = T(1) / scalar;
+            for (auto& element : matrix.data)
+            {
+                element *= inverseScalar;
+            }
+        }
+        else
+        {
+            for (auto& element : matrix.data)
+            {
+                element /= scalar;
+            }
         }
         return matrix;
     }
@@ -518,9 +536,20 @@ export namespace foundation::math
     constexpr Matrix4<T>& operator/=(Matrix4<T>& matrix, T scalar) noexcept
     {
         assert(scalar != T(0));
-        for (auto& element : matrix.data)
+        if constexpr (FloatingPoint<T>)
         {
-            element /= scalar;
+            const T inverseScalar = T(1) / scalar;
+            for (auto& element : matrix.data)
+            {
+                element *= inverseScalar;
+            }
+        }
+        else
+        {
+            for (auto& element : matrix.data)
+            {
+                element /= scalar;
+            }
         }
         return matrix;
     }
@@ -1014,7 +1043,7 @@ export namespace foundation::math
     /// Task: build a transform that moves points but does not affect directions.
     template<FloatingPoint T>
     [[nodiscard]]
-    Matrix4<T> Translation(const Vector3<T>& translation) noexcept
+    Matrix4<T> MakeTranslation(const Vector3<T>& translation) noexcept
     {
         Matrix4<T> result = Matrix4<T>::Identity();
         result(0, 3) = translation.x;
@@ -1028,7 +1057,7 @@ export namespace foundation::math
     /// Task: build a transform that scales points and directions around origin.
     template<FloatingPoint T>
     [[nodiscard]]
-    Matrix4<T> Scale(const Vector3<T>& scale) noexcept
+    Matrix4<T> MakeScale(const Vector3<T>& scale) noexcept
     {
         Matrix4<T> result = Matrix4<T>::Identity();
         result(0, 0) = scale.x;
@@ -1042,7 +1071,7 @@ export namespace foundation::math
     /// Task: construct right-handed X-axis rotation.
     template<FloatingPoint T>
     [[nodiscard]]
-    Matrix4<T> RotationX(T radians) noexcept
+    Matrix4<T> MakeRotationX(T radians) noexcept
     {
         const T cosine = std::cos(radians);
         const T sine = std::sin(radians);
@@ -1060,7 +1089,7 @@ export namespace foundation::math
     /// Task: construct right-handed Y-axis rotation.
     template<FloatingPoint T>
     [[nodiscard]]
-    Matrix4<T> RotationY(T radians) noexcept
+    Matrix4<T> MakeRotationY(T radians) noexcept
     {
         const T cosine = std::cos(radians);
         const T sine = std::sin(radians);
@@ -1078,7 +1107,7 @@ export namespace foundation::math
     /// Task: construct right-handed Z-axis rotation.
     template<FloatingPoint T>
     [[nodiscard]]
-    Matrix4<T> RotationZ(T radians) noexcept
+    Matrix4<T> MakeRotationZ(T radians) noexcept
     {
         const T cosine = std::cos(radians);
         const T sine = std::sin(radians);

@@ -5,4 +5,6 @@ set(CMAKE_CXX_STANDARD 23)
 
 add_library(Math STATIC library.cpp
         Matrix.cppm
-        Vector.cppm)
+        Vector.cppm
+        Quaternion.cppm
+        Transform.cppm)

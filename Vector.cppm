@@ -249,8 +249,17 @@ export namespace foundation::math
         constexpr Vector2& operator/=(T scalar) noexcept
         {
             assert(scalar != T(0));
-            x /= scalar;
-            y /= scalar;
+            if constexpr (FloatingPoint<T>)
+            {
+                const T inverseScalar = T(1) / scalar;
+                x *= inverseScalar;
+                y *= inverseScalar;
+            }
+            else
+            {
+                x /= scalar;
+                y /= scalar;
+            }
             return *this;
         }
 
@@ -401,6 +410,54 @@ export namespace foundation::math
             return { T(0), T(0), T(1) };
         }
 
+        /// Input: none. Output: engine right direction (+X).
+        /// Task: semantic alias for gameplay/camera code.
+        [[nodiscard]]
+        static constexpr Vector3 Right() noexcept
+        {
+            return UnitX();
+        }
+
+        /// Input: none. Output: engine left direction (-X).
+        /// Task: semantic alias for gameplay/camera code.
+        [[nodiscard]]
+        static constexpr Vector3 Left() noexcept
+        {
+            return { T(-1), T(0), T(0) };
+        }
+
+        /// Input: none. Output: engine up direction (+Y).
+        /// Task: semantic alias for gameplay/camera code.
+        [[nodiscard]]
+        static constexpr Vector3 Up() noexcept
+        {
+            return UnitY();
+        }
+
+        /// Input: none. Output: engine down direction (-Y).
+        /// Task: semantic alias for gameplay/camera code.
+        [[nodiscard]]
+        static constexpr Vector3 Down() noexcept
+        {
+            return { T(0), T(-1), T(0) };
+        }
+
+        /// Input: none. Output: engine forward direction (-Z).
+        /// Task: semantic alias for right-handed camera/gameplay code.
+        [[nodiscard]]
+        static constexpr Vector3 Forward() noexcept
+        {
+            return { T(0), T(0), T(-1) };
+        }
+
+        /// Input: none. Output: engine backward direction (+Z).
+        /// Task: semantic alias for right-handed camera/gameplay code.
+        [[nodiscard]]
+        static constexpr Vector3 Backward() noexcept
+        {
+            return UnitZ();
+        }
+
         T x;
         T y;
         T z;
@@ -527,9 +584,19 @@ export namespace foundation::math
         constexpr Vector3& operator/=(T scalar) noexcept
         {
             assert(scalar != T(0));
-            x /= scalar;
-            y /= scalar;
-            z /= scalar;
+            if constexpr (FloatingPoint<T>)
+            {
+                const T inverseScalar = T(1) / scalar;
+                x *= inverseScalar;
+                y *= inverseScalar;
+                z *= inverseScalar;
+            }
+            else
+            {
+                x /= scalar;
+                y /= scalar;
+                z /= scalar;
+            }
             return *this;
         }
 
@@ -812,10 +879,21 @@ export namespace foundation::math
         constexpr Vector4& operator/=(T scalar) noexcept
         {
             assert(scalar != T(0));
-            x /= scalar;
-            y /= scalar;
-            z /= scalar;
-            w /= scalar;
+            if constexpr (FloatingPoint<T>)
+            {
+                const T inverseScalar = T(1) / scalar;
+                x *= inverseScalar;
+                y *= inverseScalar;
+                z *= inverseScalar;
+                w *= inverseScalar;
+            }
+            else
+            {
+                x /= scalar;
+                y /= scalar;
+                z /= scalar;
+                w /= scalar;
+            }
             return *this;
         }
 
@@ -1573,8 +1651,13 @@ export namespace foundation::math
     {
         const T cosTheta = Min(Dot(-incident, normal), T(1));
         const Vector2<T> perpendicular = etaRatio * (incident + (cosTheta * normal));
-        const Vector2<T> parallel =
-            -std::sqrt(std::abs(T(1) - perpendicular.LengthSquared())) * normal;
+        const T parallelLengthSquared = T(1) - perpendicular.LengthSquared();
+        if (parallelLengthSquared < T(0))
+        {
+            return Vector2<T>::Zero();
+        }
+
+        const Vector2<T> parallel = -std::sqrt(parallelLengthSquared) * normal;
         return perpendicular + parallel;
     }
 
@@ -1591,8 +1674,13 @@ export namespace foundation::math
     {
         const T cosTheta = Min(Dot(-incident, normal), T(1));
         const Vector3<T> perpendicular = etaRatio * (incident + (cosTheta * normal));
-        const Vector3<T> parallel =
-            -std::sqrt(std::abs(T(1) - perpendicular.LengthSquared())) * normal;
+        const T parallelLengthSquared = T(1) - perpendicular.LengthSquared();
+        if (parallelLengthSquared < T(0))
+        {
+            return Vector3<T>::Zero();
+        }
+
+        const Vector3<T> parallel = -std::sqrt(parallelLengthSquared) * normal;
         return perpendicular + parallel;
     }
 
@@ -1609,8 +1697,13 @@ export namespace foundation::math
     {
         const T cosTheta = Min(Dot(-incident, normal), T(1));
         const Vector4<T> perpendicular = etaRatio * (incident + (cosTheta * normal));
-        const Vector4<T> parallel =
-            -std::sqrt(std::abs(T(1) - perpendicular.LengthSquared())) * normal;
+        const T parallelLengthSquared = T(1) - perpendicular.LengthSquared();
+        if (parallelLengthSquared < T(0))
+        {
+            return Vector4<T>::Zero();
+        }
+
+        const Vector4<T> parallel = -std::sqrt(parallelLengthSquared) * normal;
         return perpendicular + parallel;
     }
 
@@ -1644,34 +1737,55 @@ export namespace foundation::math
         return vector - ((T(2) * Dot(vector, normal)) * normal);
     }
 
-    /// Input: vector and normalized destination axis.
+    /// Input: vector and destination axis.
     /// Output: projection of vector onto that axis.
-    /// Task: extract the component of a vector along a direction.
+    /// Task: extract the component of a vector along a direction. The axis does
+    /// not need to be normalized; zero-length axes return zero.
     template<FloatingPoint T>
     [[nodiscard]]
     constexpr Vector2<T> Project(const Vector2<T>& vector, const Vector2<T>& onto) noexcept
     {
-        return onto * Dot(vector, onto);
+        const T denominator = Dot(onto, onto);
+        if (denominator <= std::numeric_limits<T>::epsilon())
+        {
+            return Vector2<T>::Zero();
+        }
+
+        return onto * (Dot(vector, onto) / denominator);
     }
 
-    /// Input: vector and normalized destination axis.
+    /// Input: vector and destination axis.
     /// Output: projection of vector onto that axis.
-    /// Task: extract the component of a vector along a direction.
+    /// Task: extract the component of a vector along a direction. The axis does
+    /// not need to be normalized; zero-length axes return zero.
     template<FloatingPoint T>
     [[nodiscard]]
     constexpr Vector3<T> Project(const Vector3<T>& vector, const Vector3<T>& onto) noexcept
     {
-        return onto * Dot(vector, onto);
+        const T denominator = Dot(onto, onto);
+        if (denominator <= std::numeric_limits<T>::epsilon())
+        {
+            return Vector3<T>::Zero();
+        }
+
+        return onto * (Dot(vector, onto) / denominator);
     }
 
-    /// Input: vector and normalized destination axis.
+    /// Input: vector and destination axis.
     /// Output: projection of vector onto that axis.
-    /// Task: extract the component of a vector along a direction.
+    /// Task: extract the component of a vector along a direction. The axis does
+    /// not need to be normalized; zero-length axes return zero.
     template<FloatingPoint T>
     [[nodiscard]]
     constexpr Vector4<T> Project(const Vector4<T>& vector, const Vector4<T>& onto) noexcept
     {
-        return onto * Dot(vector, onto);
+        const T denominator = Dot(onto, onto);
+        if (denominator <= std::numeric_limits<T>::epsilon())
+        {
+            return Vector4<T>::Zero();
+        }
+
+        return onto * (Dot(vector, onto) / denominator);
     }
 
     /// Input: two points. Output: squared distance between them.
@@ -1840,12 +1954,12 @@ export namespace foundation::math
         /// +X = right, +Y = up, -Z = forward.
         /// Keeping this in constants documents the convention without forcing
         /// renderer-specific coordinate assumptions into the vector type.
-        inline constexpr Vec3f Right3f = Vec3f::UnitX();
-        inline constexpr Vec3f Left3f = { -1.0f, 0.0f, 0.0f };
-        inline constexpr Vec3f Up3f = Vec3f::UnitY();
-        inline constexpr Vec3f Down3f = { 0.0f, -1.0f, 0.0f };
-        inline constexpr Vec3f Forward3f = { 0.0f, 0.0f, -1.0f };
-        inline constexpr Vec3f Backward3f = Vec3f::UnitZ();
+        inline constexpr Vec3f Right3f = Vec3f::Right();
+        inline constexpr Vec3f Left3f = Vec3f::Left();
+        inline constexpr Vec3f Up3f = Vec3f::Up();
+        inline constexpr Vec3f Down3f = Vec3f::Down();
+        inline constexpr Vec3f Forward3f = Vec3f::Forward();
+        inline constexpr Vec3f Backward3f = Vec3f::Backward();
     }
 
     //=========================================================
