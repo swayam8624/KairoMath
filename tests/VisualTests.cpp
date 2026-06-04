@@ -7,12 +7,12 @@
 #include <chrono>
 #include <sstream>
 
-import Foundation.Math.Vector;
-import Foundation.Math.Matrix;
-import Foundation.Math.Quaternion;
-import Foundation.Math.Transform;
+import Kairo.Foundation.Math.Vector;
+import Kairo.Foundation.Math.Matrix;
+import Kairo.Foundation.Math.Quaternion;
+import Kairo.Foundation.Math.Transform;
 
-using namespace foundation::math;
+using namespace kairo::foundation::math;
 
 // ASCII Renderer helper class for rendering 3D wireframe cube to console
 class AsciiRenderer
@@ -92,7 +92,7 @@ void GenerateHTMLVisualizer(const std::string& filepath)
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Foundation Math Visual Tests</title>
+    <title>KairoMath Visual Tests</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -302,7 +302,7 @@ void GenerateHTMLVisualizer(const std::string& filepath)
 <body>
 
     <header>
-        <h1>Foundation Math visualizer</h1>
+        <h1>KairoMath Visualizer</h1>
         <div class="subtitle">Interactive verification of C++ module math operations</div>
     </header>
 
@@ -917,7 +917,7 @@ void RunTerminalCubeAnimation()
 
     std::cout << "\033[2J"; // Clear screen
     std::cout << "=========================================================\n";
-    std::cout << "          FOUNDATION MATH 3D TERMINAL DEMO               \n";
+    std::cout << "          KAIROMATH 3D TERMINAL DEMO                     \n";
     std::cout << "=========================================================\n";
     std::cout << "Preparing 3D rotating cube animation in console...\n";
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -973,7 +973,7 @@ void RunTerminalCubeAnimation()
 int main()
 {
     std::cout << "\n=========================================================\n";
-    std::cout << "          FOUNDATION MATH STABILIZATION PASS             \n";
+    std::cout << "          KAIROMATH STABILIZATION PASS                   \n";
     std::cout << "=========================================================\n\n";
 
     // 1. Vector operation demo checks

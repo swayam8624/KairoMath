@@ -6,14 +6,14 @@ module;
 #include <limits>
 #include <type_traits>
 
-export module Foundation.Math.Transform;
+export module Kairo.Foundation.Math.Transform;
 
-import Foundation.Math.Vector;
-import Foundation.Math.Matrix;
-import Foundation.Math.Quaternion;
+import Kairo.Foundation.Math.Vector;
+import Kairo.Foundation.Math.Matrix;
+import Kairo.Foundation.Math.Quaternion;
 
 
-export namespace foundation::math
+export namespace kairo::foundation::math
 {
     template<FloatingPoint T>
     struct Transform;
@@ -196,7 +196,7 @@ export namespace foundation::math
         [[nodiscard]]
         Vector3<T> Forward() const noexcept
         {
-            return foundation::math::Forward(Rotation);
+            return kairo::foundation::math::Forward(Rotation);
         }
 
         /// Input: none.
@@ -205,7 +205,7 @@ export namespace foundation::math
         [[nodiscard]]
         Vector3<T> Right() const noexcept
         {
-            return foundation::math::Right(Rotation);
+            return kairo::foundation::math::Right(Rotation);
         }
 
         /// Input: none.
@@ -214,28 +214,28 @@ export namespace foundation::math
         [[nodiscard]]
         Vector3<T> Up() const noexcept
         {
-            return foundation::math::Up(Rotation);
+            return kairo::foundation::math::Up(Rotation);
         }
 
         /// Input: none. Output: opposite of Forward(). Task: convenience direction.
         [[nodiscard]]
         Vector3<T> Backward() const noexcept
         {
-            return foundation::math::Backward(Rotation);
+            return kairo::foundation::math::Backward(Rotation);
         }
 
         /// Input: none. Output: opposite of Right(). Task: convenience direction.
         [[nodiscard]]
         Vector3<T> Left() const noexcept
         {
-            return foundation::math::Left(Rotation);
+            return kairo::foundation::math::Left(Rotation);
         }
 
         /// Input: none. Output: opposite of Up(). Task: convenience direction.
         [[nodiscard]]
         Vector3<T> Down() const noexcept
         {
-            return foundation::math::Down(Rotation);
+            return kairo::foundation::math::Down(Rotation);
         }
 
         /// Input: none.
@@ -340,7 +340,7 @@ export namespace foundation::math
     [[nodiscard]]
     Vector3<T> TransformNormal(const Transform<T>& transform, const Vector3<T>& normal) noexcept
     {
-        return foundation::math::TransformNormal(ToMatrix4(transform), normal);
+        return kairo::foundation::math::TransformNormal(ToMatrix4(transform), normal);
     }
 
     /// Input: transform and local point.
@@ -559,4 +559,4 @@ export namespace foundation::math
 
     static_assert(std::is_standard_layout_v<Transformf>);
 
-} // namespace foundation::math
+} // namespace kairo::foundation::math

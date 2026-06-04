@@ -1,12 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 
-import Foundation.Math.Vector;
-import Foundation.Math.Matrix;
-import Foundation.Math.Quaternion;
-import Foundation.Math.Transform;
+import Kairo.Foundation.Math.Vector;
+import Kairo.Foundation.Math.Matrix;
+import Kairo.Foundation.Math.Quaternion;
+import Kairo.Foundation.Math.Transform;
 
-using namespace foundation::math;
+using namespace kairo::foundation::math;
 
 TEST_CASE("Vector Project with non-unit axes", "[Vector]")
 {

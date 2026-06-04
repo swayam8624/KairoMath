@@ -8,10 +8,10 @@ module;
 #include <limits>
 #include <type_traits>
 
-export module Foundation.Math.Vector;
+export module Kairo.Foundation.Math.Vector;
 
 
-export namespace foundation::math
+export namespace kairo::foundation::math
 {
     //=========================================================
     // Concepts
@@ -1988,4 +1988,4 @@ export namespace foundation::math
     static_assert(alignof(Vec4f) == alignof(float));
     static_assert(alignof(Vec4d) == alignof(double));
 
-} // namespace foundation::math
+} // namespace kairo::foundation::math

@@ -9,13 +9,13 @@ module;
 #include <type_traits>
 #include <utility>
 
-export module Foundation.Math.Quaternion;
+export module Kairo.Foundation.Math.Quaternion;
 
-import Foundation.Math.Vector;
-import Foundation.Math.Matrix;
+import Kairo.Foundation.Math.Vector;
+import Kairo.Foundation.Math.Matrix;
 
 
-export namespace foundation::math
+export namespace kairo::foundation::math
 {
     template<FloatingPoint T>
     struct Quaternion;
@@ -916,4 +916,4 @@ export namespace foundation::math
     static_assert(sizeof(Quatf) == sizeof(float) * 4);
     static_assert(alignof(Quatf) == alignof(float));
 
-} // namespace foundation::math
+} // namespace kairo::foundation::math

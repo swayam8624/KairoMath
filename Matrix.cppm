@@ -9,12 +9,12 @@ module;
 #include <limits>
 #include <type_traits>
 
-export module Foundation.Math.Matrix;
+export module Kairo.Foundation.Math.Matrix;
 
-import Foundation.Math.Vector;
+import Kairo.Foundation.Math.Vector;
 
 
-export namespace foundation::math
+export namespace kairo::foundation::math
 {
     // Matrix convention for the whole module:
     // - Row-major memory layout.
@@ -1347,4 +1347,4 @@ export namespace foundation::math
     static_assert(sizeof(Mat3f) == sizeof(float) * 9);
     static_assert(sizeof(Mat4f) == sizeof(float) * 16);
 
-} // namespace foundation::math
+} // namespace kairo::foundation::math
