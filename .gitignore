@@ -1,0 +1,26 @@
+# CMake build directories
+/build/
+/cmake-build-debug/
+/cmake-build-release/
+/CMakeFiles/
+/CMakeSettings.json
+/CMakeUserPresets.json
+
+# Compiled binaries and libraries
+*.o
+*.a
+*.so
+*.dylib
+*.out
+
+# Generated Visual Verification Page
+/visual_tests.html
+
+# IDE-specific configurations
+/.idea/
+/.vscode/
+*.swp
+*.swo
+
+# OS-specific files
+.DS_Store
