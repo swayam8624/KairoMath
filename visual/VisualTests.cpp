@@ -1,0 +1,2102 @@
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <string>
+#include <cmath>
+#include <thread>
+#include <chrono>
+#include <sstream>
+#include <iomanip>
+
+import Kairo.Foundation.Math.Vector;
+import Kairo.Foundation.Math.Matrix;
+import Kairo.Foundation.Math.Quaternion;
+import Kairo.Foundation.Math.Transform;
+import Kairo.Foundation.Math.DynamicMatrix;
+import Kairo.Foundation.Math.LinearAlgebra.LinearSolve;
+import Kairo.Foundation.Math.LinearAlgebra.Decomposition;
+import Kairo.Foundation.Math.LinearAlgebra.Eigen;
+import Kairo.Foundation.Math.LinearAlgebra.SVD;
+import Kairo.Foundation.Math.LinearAlgebra.Statistics;
+
+using namespace kairo::foundation::math;
+
+// ASCII Renderer helper class for rendering 3D wireframe cube to console
+class AsciiRenderer
+{
+public:
+    int width;
+    int height;
+    std::vector<std::string> buffer;
+
+    AsciiRenderer(int w, int h) : width(w), height(h)
+    {
+        Clear();
+    }
+
+    void Clear()
+    {
+        buffer.assign(height, std::string(width, ' '));
+    }
+
+    void DrawPixel(int x, int y, char c)
+    {
+        if (x >= 0 && x < width && y >= 0 && y < height)
+        {
+            buffer[y][x] = c;
+        }
+    }
+
+    void DrawLine(int x0, int y0, int x1, int y1, char c)
+    {
+        int dx = std::abs(x1 - x0);
+        int dy = std::abs(y1 - y0);
+        int sx = (x0 < x1) ? 1 : -1;
+        int sy = (y0 < y1) ? 1 : -1;
+        int err = dx - dy;
+
+        while (true)
+        {
+            DrawPixel(x0, y0, c);
+            if (x0 == x1 && y0 == y1) break;
+            int e2 = 2 * err;
+            if (e2 > -dy)
+            {
+                err -= dy;
+                x0 += sx;
+            }
+            if (e2 < dx)
+            {
+                err += dx;
+                y0 += sy;
+            }
+        }
+    }
+
+    void Render()
+    {
+        // Cursor to top-left
+        std::cout << "\033[H";
+        for (const auto& line : buffer)
+        {
+            std::cout << line << "\n";
+        }
+    }
+};
+
+// JSON helper functions
+template<typename T>
+std::string MatrixToJson(const DynamicMatrix<T>& A)
+{
+    std::ostringstream ss;
+    ss << "[";
+    for (std::size_t r = 0; r < A.Rows(); ++r)
+    {
+        if (r > 0) ss << ",";
+        ss << "[";
+        for (std::size_t c = 0; c < A.Columns(); ++c)
+        {
+            if (c > 0) ss << ",";
+            ss << A(r, c);
+        }
+        ss << "]";
+    }
+    ss << "]";
+    return ss.str();
+}
+
+template<typename T>
+std::string VectorToJson(const std::vector<T>& v)
+{
+    std::ostringstream ss;
+    ss << "[";
+    for (std::size_t i = 0; i < v.size(); ++i)
+    {
+        if (i > 0) ss << ",";
+        ss << v[i];
+    }
+    ss << "]";
+    return ss.str();
+}
+
+std::string VectorSizeTToJson(const std::vector<std::size_t>& v)
+{
+    std::ostringstream ss;
+    ss << "[";
+    for (std::size_t i = 0; i < v.size(); ++i)
+    {
+        if (i > 0) ss << ",";
+        ss << v[i];
+    }
+    ss << "]";
+    return ss.str();
+}
+
+// Runs the interactive API server backend mode
+void RunAPIMode()
+{
+    // Configure standard output for maximum precision JSON
+    std::cout << std::fixed << std::setprecision(10);
+
+    std::string cmd;
+    if (!(std::cin >> cmd))
+    {
+        std::cout << "{\"status\": \"error\", \"message\": \"No command provided\"}\n";
+        return;
+    }
+
+    try
+    {
+        if (cmd == "project")
+        {
+            double ax, ay, bx, by;
+            if (!(std::cin >> ax >> ay >> bx >> by)) throw std::runtime_error("Invalid arguments for project");
+            Vec2d a(ax, ay);
+            Vec2d b(bx, by);
+            Vec2d p = Project(a, b);
+            double dot = Dot(a, b);
+            double b_len_sq = Dot(b, b);
+            std::cout << "{\"status\": \"success\", \"px\": " << p.x << ", \"py\": " << p.y 
+                      << ", \"dot\": " << dot << ", \"b_len_sq\": " << b_len_sq << "}\n";
+        }
+        else if (cmd == "refract")
+        {
+            double ix, iy, iz, nx, ny, nz, eta;
+            if (!(std::cin >> ix >> iy >> iz >> nx >> ny >> nz >> eta)) throw std::runtime_error("Invalid arguments for refract");
+            Vec3d i(ix, iy, iz);
+            Vec3d n(nx, ny, nz);
+            
+            // Normalize vectors
+            Vec3d iNorm = i.Normalized();
+            Vec3d nNorm = n.Normalized();
+            
+            Vec3d r = Reflect(iNorm, nNorm);
+            Vec3d refr = Refract(iNorm, nNorm, eta);
+            bool tir = (refr.LengthSquared() == 0.0 && iNorm.LengthSquared() > 0.0);
+            
+            std::cout << "{\"status\": \"success\", "
+                      << "\"rx\": " << r.x << ", \"ry\": " << r.y << ", \"rz\": " << r.z << ", "
+                      << "\"refr_x\": " << refr.x << ", \"refr_y\": " << refr.y << ", \"refr_z\": " << refr.z << ", "
+                      << "\"tir\": " << (tir ? "true" : "false") << "}\n";
+        }
+        else if (cmd == "transform")
+        {
+            double tx, ty, tz, rx, ry, rz, sx, sy, sz;
+            if (!(std::cin >> tx >> ty >> tz >> rx >> ry >> rz >> sx >> sy >> sz)) throw std::runtime_error("Invalid arguments for transform");
+            
+            Vec3d t(tx, ty, tz);
+            // Construct rotation quaternion
+            Quaternion<double> q = RotationAroundX(rx) * RotationAroundY(ry) * RotationAroundZ(rz);
+            Vec3d s(sx, sy, sz);
+            Transformd transform(t, q, s);
+            
+            Mat4d mat = ToMatrix4(transform);
+            
+            std::cout << "{\"status\": \"success\", \"matrix\": [";
+            for (std::size_t r = 0; r < 4; ++r)
+            {
+                if (r > 0) std::cout << ",";
+                std::cout << "[" << mat(r, 0) << "," << mat(r, 1) << "," << mat(r, 2) << "," << mat(r, 3) << "]";
+            }
+            std::cout << "]}\n";
+        }
+        else if (cmd == "solve")
+        {
+            std::size_t rows, cols;
+            if (!(std::cin >> rows >> cols)) throw std::runtime_error("Invalid dimensions for solve");
+            
+            DynamicMatrix<double> A(rows, cols);
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                for (std::size_t c = 0; c < cols; ++c)
+                {
+                    double val;
+                    if (!(std::cin >> val)) throw std::runtime_error("Missing matrix element");
+                    A(r, c) = val;
+                }
+            }
+            
+            std::vector<double> b(rows);
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                double val;
+                if (!(std::cin >> val)) throw std::runtime_error("Missing vector b element");
+                b[r] = val;
+            }
+            
+            // Computations
+            DynamicMatrix<double> ref = RowEchelonForm(A);
+            DynamicMatrix<double> rref = ReducedRowEchelonForm(A);
+            
+            // Try to solve
+            std::vector<double> x;
+            std::string solve_error = "";
+            try
+            {
+                x = LinearSolve(A, b);
+            }
+            catch (const std::exception& e)
+            {
+                solve_error = e.what();
+            }
+            
+            std::cout << "{\"status\": \"success\", ";
+            if (solve_error.empty())
+            {
+                std::cout << "\"x\": " << VectorToJson(x) << ", ";
+            }
+            else
+            {
+                std::cout << "\"solve_error\": \"" << solve_error << "\", ";
+            }
+            std::cout << "\"ref\": " << MatrixToJson(ref) << ", "
+                      << "\"rref\": " << MatrixToJson(rref) << "}\n";
+        }
+        else if (cmd == "decompose")
+        {
+            std::string method;
+            std::size_t rows, cols;
+            if (!(std::cin >> method >> rows >> cols)) throw std::runtime_error("Invalid arguments for decompose");
+            
+            DynamicMatrix<double> A(rows, cols);
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                for (std::size_t c = 0; c < cols; ++c)
+                {
+                    double val;
+                    if (!(std::cin >> val)) throw std::runtime_error("Missing matrix element");
+                    A(r, c) = val;
+                }
+            }
+            
+            std::cout << "{\"status\": \"success\", ";
+            if (method == "lu")
+            {
+                LUResult<double> res = LU(A);
+                std::cout << "\"L\": " << MatrixToJson(res.L) << ", \"U\": " << MatrixToJson(res.U) << "}\n";
+            }
+            else if (method == "lup")
+            {
+                LUPResult<double> res = LUP(A);
+                std::cout << "\"L\": " << MatrixToJson(res.L) << ", \"U\": " << MatrixToJson(res.U) 
+                          << ", \"P\": " << VectorSizeTToJson(res.P) << "}\n";
+            }
+            else if (method == "qr")
+            {
+                QRResult<double> res = QR(A);
+                std::cout << "\"Q\": " << MatrixToJson(res.Q) << ", \"R\": " << MatrixToJson(res.R) << "}\n";
+            }
+            else if (method == "cholesky")
+            {
+                DynamicMatrix<double> L = Cholesky(A);
+                std::cout << "\"L\": " << MatrixToJson(L) << "}\n";
+            }
+            else if (method == "ldlt")
+            {
+                LDLTResult<double> res = LDLT(A);
+                std::cout << "\"L\": " << MatrixToJson(res.L) << ", \"D\": " << VectorToJson(res.D) << "}\n";
+            }
+            else
+            {
+                throw std::runtime_error("Unknown decomposition method: " + method);
+            }
+        }
+        else if (cmd == "eigen")
+        {
+            std::size_t rows, cols;
+            if (!(std::cin >> rows >> cols)) throw std::runtime_error("Invalid dimensions for eigen");
+            
+            DynamicMatrix<double> A(rows, cols);
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                for (std::size_t c = 0; c < cols; ++c)
+                {
+                    double val;
+                    if (!(std::cin >> val)) throw std::runtime_error("Missing matrix element");
+                    A(r, c) = val;
+                }
+            }
+            
+            // Symmetrize A to ensure QREigenVectors works stably
+            DynamicMatrix<double> symA(rows, cols);
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                for (std::size_t c = 0; c < cols; ++c)
+                {
+                    symA(r, c) = 0.5 * (A(r, c) + A(c, r));
+                }
+            }
+            
+            QREigenResult<double> res = QREigenVectors(symA);
+            std::cout << "{\"status\": \"success\", \"eigenvalues\": " << VectorToJson(res.eigenvalues) 
+                      << ", \"eigenvectors\": " << MatrixToJson(res.eigenvectors) << "}\n";
+        }
+        else if (cmd == "svd")
+        {
+            std::size_t rows, cols;
+            if (!(std::cin >> rows >> cols)) throw std::runtime_error("Invalid dimensions for svd");
+            
+            DynamicMatrix<double> A(rows, cols);
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                for (std::size_t c = 0; c < cols; ++c)
+                {
+                    double val;
+                    if (!(std::cin >> val)) throw std::runtime_error("Missing matrix element");
+                    A(r, c) = val;
+                }
+            }
+            
+            SVDResult<double> res = SingularValueDecomposition(A);
+            std::cout << "{\"status\": \"success\", \"U\": " << MatrixToJson(res.U) 
+                      << ", \"Sigma\": " << VectorToJson(res.Sigma) 
+                      << ", \"V\": " << MatrixToJson(res.V) << "}\n";
+        }
+        else if (cmd == "pca")
+        {
+            std::size_t rows, cols;
+            if (!(std::cin >> rows >> cols)) throw std::runtime_error("Invalid dimensions for pca");
+            
+            DynamicMatrix<double> A(rows, cols);
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                for (std::size_t c = 0; c < cols; ++c)
+                {
+                    double val;
+                    if (!(std::cin >> val)) throw std::runtime_error("Missing matrix element");
+                    A(r, c) = val;
+                }
+            }
+            
+            PCAResult<double> res = PCA(A);
+            std::cout << "{\"status\": \"success\", \"explained_variance\": " << VectorToJson(res.explainedVariance) 
+                      << ", \"components\": " << MatrixToJson(res.components) << "}\n";
+        }
+        else if (cmd == "regression")
+        {
+            std::size_t rows, cols;
+            if (!(std::cin >> rows >> cols)) throw std::runtime_error("Invalid dimensions for regression");
+            
+            DynamicMatrix<double> A(rows, cols);
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                for (std::size_t c = 0; c < cols; ++c)
+                {
+                    double val;
+                    if (!(std::cin >> val)) throw std::runtime_error("Missing matrix element");
+                    A(r, c) = val;
+                }
+            }
+            
+            std::vector<double> y(rows);
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                double val;
+                if (!(std::cin >> val)) throw std::runtime_error("Missing vector y element");
+                y[r] = val;
+            }
+            
+            std::vector<double> beta = LinearRegression(A, y);
+            std::cout << "{\"status\": \"success\", \"beta\": " << VectorToJson(beta) << "}\n";
+        }
+        else if (cmd == "determinant")
+        {
+            std::size_t rows, cols;
+            if (!(std::cin >> rows >> cols)) throw std::runtime_error("Invalid dimensions for determinant");
+            
+            DynamicMatrix<double> A(rows, cols);
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                for (std::size_t c = 0; c < cols; ++c)
+                {
+                    double val;
+                    if (!(std::cin >> val)) throw std::runtime_error("Missing matrix element");
+                    A(r, c) = val;
+                }
+            }
+            double det = Determinant(A);
+            std::cout << "{\"status\": \"success\", \"determinant\": " << det << "}\n";
+        }
+        else if (cmd == "inverse")
+        {
+            std::size_t rows, cols;
+            if (!(std::cin >> rows >> cols)) throw std::runtime_error("Invalid dimensions for inverse");
+            
+            DynamicMatrix<double> A(rows, cols);
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                for (std::size_t c = 0; c < cols; ++c)
+                {
+                    double val;
+                    if (!(std::cin >> val)) throw std::runtime_error("Missing matrix element");
+                    A(r, c) = val;
+                }
+            }
+            DynamicMatrix<double> inv = Inverse(A);
+            std::cout << "{\"status\": \"success\", \"inverse\": " << MatrixToJson(inv) << "}\n";
+        }
+        else if (cmd == "rank")
+        {
+            std::size_t rows, cols;
+            if (!(std::cin >> rows >> cols)) throw std::runtime_error("Invalid dimensions for rank");
+            
+            DynamicMatrix<double> A(rows, cols);
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                for (std::size_t c = 0; c < cols; ++c)
+                {
+                    double val;
+                    if (!(std::cin >> val)) throw std::runtime_error("Missing matrix element");
+                    A(r, c) = val;
+                }
+            }
+            std::size_t rk = Rank(A);
+            std::cout << "{\"status\": \"success\", \"rank\": " << rk << "}\n";
+        }
+        else if (cmd == "condition_number")
+        {
+            std::size_t rows, cols;
+            if (!(std::cin >> rows >> cols)) throw std::runtime_error("Invalid dimensions for condition_number");
+            
+            DynamicMatrix<double> A(rows, cols);
+            for (std::size_t r = 0; r < rows; ++r)
+            {
+                for (std::size_t c = 0; c < cols; ++c)
+                {
+                    double val;
+                    if (!(std::cin >> val)) throw std::runtime_error("Missing matrix element");
+                    A(r, c) = val;
+                }
+            }
+            double cond = ConditionNumber(A);
+            if (std::isinf(cond))
+            {
+                std::cout << "{\"status\": \"success\", \"condition_number\": \"Infinity\"}\n";
+            }
+            else
+            {
+                std::cout << "{\"status\": \"success\", \"condition_number\": " << cond << "}\n";
+            }
+        }
+        else
+        {
+            throw std::runtime_error("Unknown command: " + cmd);
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cout << "{\"status\": \"error\", \"message\": \"" << e.what() << "\"}\n";
+    }
+}
+
+// Writes the interactive HTML visualizer page
+void GenerateHTMLVisualizer(const std::string& filepath)
+{
+    std::ofstream file(filepath);
+    if (!file.is_open())
+    {
+        std::cerr << "Failed to generate visual_tests.html\n";
+        return;
+    }
+
+    file << R"HTML(<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KairoMath Developer Portal & Interactive Sandbox</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-main: #0B0F17;
+            --bg-sidebar: #05070B;
+            --bg-card: #121824;
+            --border-color: #1E293B;
+            --text-primary: #F8FAFC;
+            --text-secondary: #94A3B8;
+            --text-muted: #475569;
+            --accent-cyan: #06B6D4;
+            --accent-indigo: #6366F1;
+            --accent-green: #10B981;
+            --accent-rose: #F43F5E;
+            --accent-amber: #F59E0B;
+            --font-main: 'Outfit', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .sidebar {
+            width: 290px;
+            background-color: var(--bg-sidebar);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        .sidebar-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .sidebar-title {
+            font-size: 1.4rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #FFF 0%, var(--accent-cyan) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+        .status-badge {
+            display: flex;
+            align-items: center;
+            font-size: 0.75rem;
+            font-family: var(--font-mono);
+            color: var(--text-secondary);
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--accent-rose);
+            box-shadow: 0 0 6px var(--accent-rose);
+            margin-right: 0.5rem;
+            transition: all 0.3s ease;
+        }
+        .status-dot.online {
+            background-color: var(--accent-green);
+            box-shadow: 0 0 6px var(--accent-green);
+        }
+        .search-container {
+            padding: 0.8rem 1.2rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .search-input {
+            width: 100%;
+            background-color: var(--bg-main);
+            border: 1px solid var(--border-color);
+            color: #FFF;
+            padding: 0.5rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            outline: none;
+            font-family: inherit;
+        }
+        .search-input:focus { border-color: var(--accent-cyan); }
+        .sidebar-menu {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 0;
+        }
+        .menu-section { margin-bottom: 1.5rem; }
+        .menu-section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 0.1em;
+            padding: 0 1.5rem 0.4rem 1.5rem;
+        }
+        .menu-link {
+            display: block;
+            padding: 0.4rem 1.5rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.88rem;
+            font-weight: 500;
+            border-left: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+        .menu-link:hover {
+            color: var(--accent-cyan);
+            background-color: rgba(6, 182, 212, 0.03);
+        }
+        .menu-link.active {
+            color: var(--text-primary);
+            border-left-color: var(--accent-cyan);
+            background-color: rgba(6, 182, 212, 0.07);
+            font-weight: 600;
+        }
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2.5rem 3.5rem;
+            scroll-behavior: smooth;
+        }
+        .doc-section {
+            display: none;
+            animation: fadeIn 0.3s ease-in-out;
+            max-width: 960px;
+        }
+        .doc-section.active { display: block; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        h2 { font-size: 2rem; font-weight: 700; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; }
+        p { color: var(--text-secondary); margin-bottom: 1.2rem; line-height: 1.6; }
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.8rem;
+            margin: 1.5rem 0;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+        .card-wide { grid-template-columns: 1fr; }
+        .card-header {
+            grid-column: 1 / -1;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.8rem;
+            margin-bottom: 0.8rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card-title { font-size: 1.25rem; font-weight: 600; }
+        .badge {
+            background-color: rgba(99, 102, 241, 0.15);
+            color: #818CF8;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            font-size: 0.75rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .visual-area {
+            background: #07090F;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 320px;
+        }
+        .controls { display: flex; flex-direction: column; justify-content: space-between; }
+        .control-group { margin-bottom: 1rem; }
+        .control-label { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.3rem; }
+        .control-value { font-family: var(--font-mono); color: var(--accent-cyan); font-weight: 600; }
+        input[type="range"] { width: 100%; height: 6px; background: #1E293B; border-radius: 3px; outline: none; -webkit-appearance: none; }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 15px; height: 15px; border-radius: 50%; background: var(--accent-cyan); cursor: pointer;
+        }
+        .btn-mode {
+            background: var(--bg-main); border: 1px solid var(--border-color); color: var(--text-secondary);
+            padding: 0.4rem 0.8rem; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 600; transition: all 0.2s;
+        }
+        .btn-mode.active { background: rgba(6, 182, 212, 0.1); border-color: var(--accent-cyan); color: #FFF; }
+        .equation-block {
+            background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 6px;
+            padding: 0.8rem; font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5; color: var(--text-secondary);
+        }
+        .eq-line { margin-bottom: 0.3rem; }
+        .eq-line span { font-weight: 600; }
+        pre {
+            background-color: var(--bg-sidebar); border: 1px solid var(--border-color); border-radius: 8px;
+            padding: 1.2rem; overflow-x: auto; margin: 1.2rem 0; font-family: var(--font-mono); font-size: 0.85rem; color: #E2E8F0;
+        }
+        .cpp-comment { color: #576b85; }
+        .cpp-keyword { color: #ff79c6; }
+        .cpp-type { color: #8be9fd; }
+        .api-table {
+            width: 100%; border-collapse: collapse; margin: 1.2rem 0; font-size: 0.9rem; text-align: left;
+        }
+        .api-table th, .api-table td { padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border-color); }
+        .api-table th { font-weight: 600; color: var(--text-primary); background-color: rgba(255,255,255,0.02); }
+        .api-table td code { font-family: var(--font-mono); color: var(--accent-indigo); }
+        .matrix-grid-input { display: grid; gap: 0.4rem; background: rgba(0, 0, 0, 0.2); padding: 0.8rem; border-radius: 8px; border: 1px solid var(--border-color); width: fit-content; }
+        .matrix-input-cell {
+            width: 50px; height: 36px; background-color: var(--bg-main); border: 1px solid var(--border-color);
+            color: #FFF; text-align: center; font-family: var(--font-mono); font-size: 0.88rem; border-radius: 4px; outline: none;
+        }
+        .matrix-input-cell:focus { border-color: var(--accent-cyan); }
+        .solve-btn {
+            background-color: var(--accent-cyan); color: #000; border: none; padding: 0.5rem 1rem; border-radius: 6px;
+            font-weight: 600; cursor: pointer; transition: all 0.2s; font-family: inherit; font-size: 0.85rem;
+        }
+        .solve-btn:hover { background-color: #22D3EE; }
+        .preset-select {
+            background-color: var(--bg-main); border: 1px solid var(--border-color); color: #FFF;
+            padding: 0.4rem 0.8rem; border-radius: 6px; outline: none; font-family: inherit; font-size: 0.85rem;
+        }
+        .output-matrix-container { display: inline-block; position: relative; padding: 0 8px; margin: 6px 12px; }
+        .output-matrix-container::before, .output-matrix-container::after {
+            content: ""; position: absolute; top: 0; bottom: 0; width: 4px; border: 2px solid var(--text-primary);
+        }
+        .output-matrix-container::before { left: 0; border-right: none; }
+        .output-matrix-container::after { right: 0; border-left: none; }
+        .output-matrix { display: grid; gap: 4px 8px; padding: 6px; }
+        .output-cell { font-family: var(--font-mono); font-size: 0.85rem; text-align: right; color: var(--accent-cyan); min-width: 45px; }
+        .matrix-expr { display: flex; align-items: center; flex-wrap: wrap; margin-top: 1rem; font-family: var(--font-mono); font-size: 0.9rem; }
+        .pca-canvas-elem { border: 1px solid var(--border-color); background: #07090F; cursor: crosshair; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">KairoMath SDK</div>
+            <div class="status-badge">
+                <span class="status-dot" id="status-dot"></span>
+                <span id="status-text">C++ Engine: Disconnected</span>
+            </div>
+        </div>
+        <div class="search-container">
+            <input type="text" class="search-input" id="sidebar-search" placeholder="Search API docs..." oninput="filterDocs()">
+        </div>
+        <div class="sidebar-menu">
+            <div class="menu-section">
+                <div class="menu-section-title">Getting Started</div>
+                <a href="#intro" class="menu-link active" onclick="switchDocTab('intro')">Library Overview</a>
+            </div>
+            <div class="menu-section">
+                <div class="menu-section-title">Vector Mathematics</div>
+                <a href="#vectors" class="menu-link" onclick="switchDocTab('vectors')">Vector2, Vector3 & Vector4</a>
+            </div>
+            <div class="menu-section">
+                <div class="menu-section-title">Rotations</div>
+                <a href="#quaternions" class="menu-link" onclick="switchDocTab('quaternions')">Quaternions</a>
+            </div>
+            <div class="menu-section">
+                <div class="menu-section-title">Affine Transformations</div>
+                <a href="#transforms" class="menu-link" onclick="switchDocTab('transforms')">TRS Transform3D</a>
+            </div>
+            <div class="menu-section">
+                <div class="menu-section-title">Linear Solvers</div>
+                <a href="#solve" class="menu-link" onclick="switchDocTab('solve')">Systems & Row Echelon</a>
+            </div>
+            <div class="menu-section">
+                <div class="menu-section-title">Decompositions</div>
+                <a href="#decompose" class="menu-link" onclick="switchDocTab('decompose')">LU, QR & Cholesky</a>
+            </div>
+            <div class="menu-section">
+                <div class="menu-section-title">Spectral & Dimension</div>
+                <a href="#spectral" class="menu-link" onclick="switchDocTab('spectral')">Eigen & Golub-Kahan SVD</a>
+            </div>
+            <div class="menu-section">
+                <div class="menu-section-title">Applied Stats</div>
+                <a href="#statistics" class="menu-link" onclick="switchDocTab('statistics')">PCA & Regression</a>
+            </div>
+            <div class="menu-section" style="border-top:1px solid var(--border-color); padding-top:1rem;">
+                <div class="menu-section-title" style="color:var(--accent-cyan);">Playgrounds</div>
+                <a href="#sandbox" class="menu-link" onclick="switchDocTab('sandbox')" style="color:#FFF; font-weight:600;">General Matrix Sandbox</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="content">
+        <!-- Introduction Tab -->
+        <section id="intro" class="doc-section active">
+            <h2>KairoMath Library</h2>
+            <p>Welcome to the official developer documentation for the <strong>KairoMath</strong> library. KairoMath is a modern, high-performance, module-partitioned C++20 mathematics SDK designed for 3D renderers, physics simulation, statistics, and optimization.</p>
+            <p>The library features modular partitioning using C++20 modules, allowing for rapid compile times and zero header contamination, while enforcing strict <code>constexpr</code> and <code>noexcept</code> validation across hot execution paths.</p>
+            
+            <h3>Compilation and Build Setup</h3>
+            <p>KairoMath is a compiled module-based library. The CMake compilation generates modular outputs under target partitions. To build and run tests locally:</p>
+            <pre>
+<span class="cpp-comment"># Build workspace using CMake and Ninja generator</span>
+cmake -B build -G Ninja
+cmake --build build
+
+<span class="cpp-comment"># Run unit tests verifying stabilization</span>
+./build/MathTests
+
+<span class="cpp-comment"># Run visual tests with API server support</span>
+python3 server.py
+</pre>
+        </section>
+
+        <!-- Vectors Tab -->
+        <section id="vectors" class="doc-section">
+            <h2>Vector Mathematics</h2>
+            <p>Vector classes support multi-dimensional coordinates with implicit scalar types (single or double precision). Hot layouts are optimized to preserve cash friendliness and avoid register spillovers.</p>
+            
+            <table class="api-table">
+                <thead>
+                    <tr><th>Function Signature</th><th>Return Type</th><th>Description</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>Dot(Vec2, Vec2)</code></td><td><code>T</code></td><td>Dot product of two vectors.</td></tr>
+                    <tr><td><code>Cross(Vec3, Vec3)</code></td><td><code>Vec3</code></td><td>Standard 3D cross product.</td></tr>
+                    <tr><td><code>Project(Vec, Vec)</code></td><td><code>Vec</code></td><td>Projects the first vector onto the second.</td></tr>
+                    <tr><td><code>Reflect(Vec, Vec)</code></td><td><code>Vec</code></td><td>Reflects incident ray around normal.</td></tr>
+                    <tr><td><code>Refract(Vec, Vec, eta)</code></td><td><code>Vec</code></td><td>Refracts incident ray using Snell's Law.</td></tr>
+                </tbody>
+            </table>
+
+            <h3>Vector Lab Playground</h3>
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Interactive Vector Operations Lab</span>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button id="btn-mode-proj" class="btn-mode active" onclick="setVectorLabMode('projection')">Projection</button>
+                        <button id="btn-mode-refr" class="btn-mode" onclick="setVectorLabMode('refraction')">Snell's Refraction</button>
+                    </div>
+                </div>
+                <div class="visual-area">
+                    <svg id="vector-svg" width="360" height="320" viewBox="-180 -160 360 320" style="width:100%; height:100%;">
+                        <line x1="-180" y1="0" x2="180" y2="0" stroke="#1E2433" stroke-width="1" />
+                        <line x1="0" y1="-160" x2="0" y2="160" stroke="#1E2433" stroke-width="1" />
+                        <circle cx="0" cy="0" r="3" fill="#FFF" />
+                        <line id="vec-axis" x1="-180" y1="0" x2="180" y2="0" stroke="#334155" stroke-dasharray="3,3" stroke-width="1.5" />
+                        <line id="vec-b" x1="0" y1="0" x2="100" y2="30" stroke="var(--accent-indigo)" stroke-width="3" />
+                        <line id="vec-a" x1="0" y1="0" x2="50" y2="80" stroke="var(--accent-rose)" stroke-width="3" />
+                        <line id="vec-proj" x1="0" y1="0" x2="0" y2="0" stroke="var(--accent-cyan)" stroke-width="3.5" />
+                        <line id="vec-helper" x1="0" y1="0" x2="0" y2="0" stroke="#475569" stroke-dasharray="2,2" stroke-width="1" />
+                        <line id="normal-line" x1="0" y1="-150" x2="0" y2="150" stroke="#94A3B8" stroke-width="1" stroke-dasharray="4,4" style="display:none;" />
+                        <rect id="medium2-rect" x="-180" y="0" width="360" height="160" fill="rgba(6, 182, 212, 0.1)" style="display:none;" />
+                        <line id="ray-inc" x1="0" y1="0" x2="0" y2="0" stroke="var(--accent-rose)" stroke-width="2.5" style="display:none;" />
+                        <line id="ray-refl" x1="0" y1="0" x2="0" y2="0" stroke="var(--accent-amber)" stroke-width="2.5" style="display:none;" />
+                        <line id="ray-refr" x1="0" y1="0" x2="0" y2="0" stroke="var(--accent-cyan)" stroke-width="2.5" style="display:none;" />
+                    </svg>
+                </div>
+                <div class="controls">
+                    <div id="ctrl-projection">
+                        <div class="control-group">
+                            <div class="control-label"><span>A Angle</span><span class="control-value" id="val-vec-a-ang">60°</span></div>
+                            <input type="range" id="slider-vec-a-ang" min="0" max="360" value="60" oninput="updateVectorLab()">
+                        </div>
+                        <div class="control-group">
+                            <div class="control-label"><span>A Length</span><span class="control-value" id="val-vec-a-mag">100</span></div>
+                            <input type="range" id="slider-vec-a-mag" min="10" max="150" value="100" oninput="updateVectorLab()">
+                        </div>
+                        <div class="control-group">
+                            <div class="control-label"><span>B Angle</span><span class="control-value" id="val-vec-b-ang">15°</span></div>
+                            <input type="range" id="slider-vec-b-ang" min="0" max="360" value="15" oninput="updateVectorLab()">
+                        </div>
+                        <div class="control-group">
+                            <div class="control-label"><span>B Length</span><span class="control-value" id="val-vec-b-mag">120</span></div>
+                            <input type="range" id="slider-vec-b-mag" min="10" max="150" value="120" oninput="updateVectorLab()">
+                        </div>
+                    </div>
+                    <div id="ctrl-refraction" style="display:none;">
+                        <div class="control-group">
+                            <div class="control-label"><span>Incident Angle</span><span class="control-value" id="val-ray-ang">45°</span></div>
+                            <input type="range" id="slider-ray-ang" min="0" max="89" value="45" oninput="updateVectorLab()">
+                        </div>
+                        <div class="control-group">
+                            <div class="control-label"><span>Index n₁</span><span class="control-value" id="val-ray-n1">1.0</span></div>
+                            <input type="range" id="slider-ray-n1" min="10" max="30" value="10" oninput="updateVectorLab()">
+                        </div>
+                        <div class="control-group">
+                            <div class="control-label"><span>Index n₂</span><span class="control-value" id="val-ray-n2">1.5</span></div>
+                            <input type="range" id="slider-ray-n2" min="10" max="30" value="15" oninput="updateVectorLab()">
+                        </div>
+                    </div>
+                    <div class="equation-block" id="vector-equation-block"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quaternions Tab -->
+        <section id="quaternions" class="doc-section">
+            <h2>Quaternion Rotations</h2>
+            <p>KairoMath implements full-featured unit quaternions to perform 3D rotations, avoiding coordinate system lock constraints. Operations include SLERP interpolation, composition, and conversion into orthonormal conversion matrices.</p>
+            
+            <pre>
+<span class="cpp-comment">// Generate rotation quaternion representing angle around arbitrary axis</span>
+Quaternion&lt;double&gt; q = RotationAroundAxis(Vec3d(0, 1, 0), AngleInRadians(45.0));
+
+<span class="cpp-comment">// Combine rotations via multiplication operator</span>
+Quaternion&lt;double&gt; qCombined = q1 * q2;
+
+<span class="cpp-comment">// Interpolate rotations using SLERP</span>
+Quaternion&lt;double&gt; qSlerped = Slerp(qStart, qEnd, 0.5);
+</pre>
+        </section>
+
+        <!-- Transformations Tab -->
+        <section id="transforms" class="doc-section">
+            <h2>TRS Transformation3D</h2>
+            <p>The <code>Transform3D</code> module aggregates Translation ($T$), Rotation ($R$ via Quaternion), and Scale ($S$) parameters. These composite coordinates form a unified $4 \times 4$ transformation matrix mapped dynamically to GPU layouts.</p>
+            
+            <h3>Transform Lab Playground</h3>
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Interactive TRS Composition Matrix</span>
+                    <span class="badge">Matrix4 Conversion</span>
+                </div>
+                <div class="visual-area">
+                    <canvas id="cube-canvas" width="300" height="300"></canvas>
+                </div>
+                <div class="controls">
+                    <div>
+                        <div class="control-group">
+                            <div class="control-label"><span>Translation X</span><span class="control-value" id="val-tx">0.0</span></div>
+                            <input type="range" id="slider-tx" min="-40" max="40" value="0" oninput="updateCube()">
+                        </div>
+                        <div class="control-group">
+                            <div class="control-label"><span>Yaw Rotation (Y)</span><span class="control-value" id="val-ry">35°</span></div>
+                            <input type="range" id="slider-ry" min="0" max="360" value="35" oninput="updateCube()">
+                        </div>
+                        <div class="control-group">
+                            <div class="control-label"><span>Pitch Rotation (X)</span><span class="control-value" id="val-rx">30°</span></div>
+                            <input type="range" id="slider-rx" min="0" max="360" value="30" oninput="updateCube()">
+                        </div>
+                        <div class="control-group">
+                            <div class="control-label"><span>Scale</span><span class="control-value" id="val-scale">1.0</span></div>
+                            <input type="range" id="slider-scale" min="5" max="25" value="10" oninput="updateCube()">
+                        </div>
+                    </div>
+                    <div class="equation-block">
+                        <div style="font-weight:600; margin-bottom:0.4rem; color: #FFF;">TRS Transform Matrix Display:</div>
+                        <div style="font-size:0.75rem; white-space:pre; font-family:var(--font-mono); line-height:1.4;" id="matrix-display">Calculating...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Solvers Tab -->
+        <section id="solve" class="doc-section">
+            <h2>Linear Systems Solver</h2>
+            <p>Solve system parameters $Ax = b$ using Gaussian elimination, and compute row echelon structures (REF/RREF) over matrix objects.</p>
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Linear Solver Workspace</span>
+                    <div>
+                        <select id="solve-preset" class="preset-select" onchange="applySolvePreset()">
+                            <option value="unique">Unique Solution</option>
+                            <option value="singular">Singular Matrix</option>
+                            <option value="hilbert">Hilbert Matrix</option>
+                        </select>
+                        <select id="solve-dim" class="preset-select" style="margin-left:0.5rem;" onchange="recreateSolveGrid()">
+                            <option value="2">2 x 2</option>
+                            <option value="3" selected>3 x 3</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="controls" style="grid-column: 1 / -1; display:flex; flex-direction:row; gap:2rem; flex-wrap:wrap;">
+                    <div>
+                        <div style="margin-bottom:0.8rem; font-weight:600;">Matrix Input A:</div>
+                        <div id="solve-matrix-container" class="matrix-grid-input"></div>
+                        <div style="margin-top:1rem; margin-bottom:0.8rem; font-weight:600;">Vector Input b:</div>
+                        <div id="solve-vector-container" style="display:flex; gap:0.4rem;"></div>
+                    </div>
+                    <div style="flex: 1; min-width: 280px; display:flex; flex-direction:column; justify-content:space-between;">
+                        <button class="solve-btn" style="align-self:flex-start; margin-bottom:1rem;" onclick="solveLinearSystem()">Calculate Solution</button>
+                        <div class="equation-block" id="solve-result-panel" style="min-height:160px;">Calculated system output will display here.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Decompositions Tab -->
+        <section id="decompose" class="doc-section">
+            <h2>Matrix Decompositions</h2>
+            <p>KairoMath provides production-ready decompositions. LU represents educational scaling, while LUP (Pivoted) ensures numerical stability. LDLT is suitable for symmetric indefinite matrices, and QR computes orthogonal matrices via Householder reflections.</p>
+            <div class="card card-wide">
+                <div class="card-header">
+                    <span class="card-title">Matrix Decompositions Lab</span>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                        <select id="decomp-method" class="preset-select">
+                            <option value="lu">LU Decomposition</option>
+                            <option value="lup" selected>LUP (Pivoted)</option>
+                            <option value="qr">QR Decomposition</option>
+                            <option value="cholesky">Cholesky Decomposition</option>
+                            <option value="ldlt">LDLT Decomposition</option>
+                        </select>
+                        <select id="decomp-preset" class="preset-select" onchange="applyDecompPreset()">
+                            <option value="rand">Random Matrix</option>
+                            <option value="sym">Symmetric Positive Definite</option>
+                            <option value="hilb">Hilbert Matrix</option>
+                        </select>
+                        <button class="solve-btn" onclick="decomposeMatrix()">Decompose</button>
+                    </div>
+                </div>
+                <div style="display:flex; gap:2rem; flex-wrap:wrap;">
+                    <div>
+                        <div style="margin-bottom:0.6rem; font-weight:600;">Input Matrix A (3x3):</div>
+                        <div id="decomp-matrix-container" class="matrix-grid-input"></div>
+                    </div>
+                    <div style="flex:1; min-width:300px; display:flex; flex-direction:column; justify-content:space-between;">
+                        <div class="equation-block" id="decomp-result-panel" style="min-height:180px;">Decomposed matrices will be listed here.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Spectral Tab -->
+        <section id="spectral" class="doc-section">
+            <h2>Spectral Theory: Eigen & SVD</h2>
+            <p>Eigenvalue resolution utilizes Householder reduction to tridiagonal form, followed by shifted tridiagonal QR sweeps. SVD decomposes matrices ($A = U \Sigma V^T$) using Golub-Kahan bidiagonalization and implicitly shifted symmetric QR sweeps.</p>
+            <div class="card card-wide">
+                <div class="card-header">
+                    <span class="card-title">Spectral Solver Lab</span>
+                    <div style="display:flex; gap:0.5rem;">
+                        <select id="spectral-preset" class="preset-select" onchange="applySpectralPreset()">
+                            <option value="sym">Symmetric Matrix</option>
+                            <option value="rand">Random Matrix</option>
+                        </select>
+                        <button class="solve-btn" onclick="calculateEigenSvd('eigen')">Eigenvalues (QR)</button>
+                        <button class="solve-btn" onclick="calculateEigenSvd('svd')" style="background-color:var(--accent-indigo); color:#FFF;">SVD (Golub-Kahan)</button>
+                    </div>
+                </div>
+                <div style="display:flex; gap:2rem; flex-wrap:wrap;">
+                    <div>
+                        <div style="margin-bottom:0.6rem; font-weight:600;">Matrix Input A (3x3):</div>
+                        <div id="spectral-matrix-container" class="matrix-grid-input"></div>
+                    </div>
+                    <div style="flex:1; min-width:300px;">
+                        <div class="equation-block" id="spectral-result-panel" style="min-height:180px;">Spectral decomposition results will display here.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stats Tab -->
+        <section id="statistics" class="doc-section">
+            <h2>Applied Statistics: PCA & Regression</h2>
+            <p>Compute linear regression coordinates and Principal Component Analysis (PCA) axes over data points.</p>
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Interactive Statistics Workspace</span>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button class="btn-mode active" id="btn-fit-reg" onclick="togglePCAOption('reg')">Regression Line</button>
+                        <button class="btn-mode active" id="btn-fit-pca" onclick="togglePCAOption('pca')">PCA Component Axes</button>
+                        <button class="solve-btn" onclick="clearPCAPoints()" style="background-color:var(--accent-rose); color:#000;">Clear</button>
+                    </div>
+                </div>
+                <div class="visual-area" style="min-height:360px;">
+                    <canvas id="pca-canvas" class="pca-canvas-elem" width="450" height="340" onclick="handlePCACanvasClick(event)"></canvas>
+                </div>
+                <div class="controls">
+                    <div>
+                        <h3>Data Point Fit Lab</h3>
+                        <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.4rem;">Click on the plot canvas to insert data coordinates. KairoMath will fit models in real-time.</p>
+                    </div>
+                    <div class="equation-block" id="pca-math-details" style="min-height:140px;">
+                        Insert at least 2 coordinate points on the canvas to begin calculations.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Matrix Sandbox Tab -->
+        <section id="sandbox" class="doc-section">
+            <h2>General Matrix Sandbox</h2>
+            <p>Configure dynamic dimensions, load presets, and execute core linear algebra operations directly against the C++ math engine.</p>
+            
+            <div class="card card-wide">
+                <div class="card-header" style="flex-wrap:wrap; gap:1rem;">
+                    <div>
+                        <label style="font-weight:600; font-size:0.85rem; margin-right:0.4rem;">Size:</label>
+                        <select id="sandbox-dim" class="preset-select" onchange="resizeSandboxGrid()">
+                            <option value="2">2 x 2</option>
+                            <option value="3" selected>3 x 3</option>
+                            <option value="4">4 x 4</option>
+                            <option value="5">5 x 5</option>
+                            <option value="6">6 x 6</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-weight:600; font-size:0.85rem; margin-right:0.4rem;">Preset:</label>
+                        <select id="sandbox-preset" class="preset-select" onchange="loadSandboxPreset()">
+                            <option value="">-- Custom Matrix --</option>
+                            <option value="identity">Identity Matrix</option>
+                            <option value="symmetric">Symmetric Matrix</option>
+                            <option value="hilbert">Hilbert Matrix</option>
+                            <option value="diagonal">Diagonal Matrix</option>
+                            <option value="random">Random Matrix</option>
+                            <option value="zero">Zero Matrix</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; gap:0.3rem; flex-wrap:wrap;">
+                        <button class="solve-btn" onclick="runSandbox('rank')">Rank</button>
+                        <button class="solve-btn" onclick="runSandbox('determinant')">Det</button>
+                        <button class="solve-btn" onclick="runSandbox('inverse')">Inverse</button>
+                        <button class="solve-btn" onclick="runSandbox('condition_number')">Condition No.</button>
+                        <button class="solve-btn" onclick="runSandbox('decomp')" style="background-color:var(--accent-indigo); color:#FFF;">Decompose</button>
+                        <button class="solve-btn" onclick="runSandbox('spectral')" style="background-color:var(--accent-indigo); color:#FFF;">Spectral</button>
+                    </div>
+                </div>
+                <div style="display:flex; gap:2.5rem; flex-wrap:wrap;">
+                    <div>
+                        <div style="margin-bottom:0.6rem; font-weight:600;">Input Matrix A:</div>
+                        <div id="sandbox-grid" class="matrix-grid-input"></div>
+                    </div>
+                    <div style="flex:1; min-width:320px; display:flex; flex-direction:column; justify-content:space-between;">
+                        <div class="equation-block" id="sandbox-result-panel" style="min-height:220px; font-size:0.85rem;">
+                            Configure values and select an operation to compute.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const API_BASE = "http://localhost:8080/api";
+        let isServerConnected = false;
+        let vectorLabMode = 'projection';
+        
+        // Setup 3D Cube Canvas variables
+        const canvas = document.getElementById('cube-canvas');
+        const ctx = canvas.getContext('2d');
+        const sliderTx = document.getElementById('slider-tx');
+        const sliderRy = document.getElementById('slider-ry');
+        const sliderRx = document.getElementById('slider-rx');
+        const sliderScale = document.getElementById('slider-scale');
+        
+        const vertices = [
+            [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+            [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]
+        ];
+        const edges = [
+            [0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6],
+            [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]
+        ];
+
+        // PCA Canvas variables
+        const pcaCanvas = document.getElementById('pca-canvas');
+        const pcaCtx = pcaCanvas.getContext('2d');
+        let pcaPoints = [];
+        let showPCARegression = true;
+        let showPCAAxes = true;
+
+        async function testAPIConnection() {
+            try {
+                const response = await fetch(`${API_BASE}/project`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ax: 1, ay: 0, bx: 1, by: 0 })
+                });
+                if (response.ok) {
+                    isServerConnected = true;
+                    document.getElementById('status-dot').className = "status-dot online";
+                    document.getElementById('status-text').innerText = "C++ Engine: Connected";
+                    updateVectorLab();
+                }
+            } catch(e) {}
+        }
+        testAPIConnection();
+
+        async function fetchAPI(endpoint, payload, fallbackFunc) {
+            if (isServerConnected) {
+                try {
+                    const response = await fetch(`${API_BASE}/${endpoint}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.status === "success") return data;
+                    }
+                } catch(e) {}
+            }
+            return fallbackFunc(payload);
+        }
+
+        function switchDocTab(tabId) {
+            document.querySelectorAll('.doc-section').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.menu-link').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            
+            // Highlight link
+            const links = document.querySelectorAll('.menu-link');
+            links.forEach(link => {
+                if (link.getAttribute('href') === `#${tabId}`) link.classList.add('active');
+            });
+
+            if (tabId === 'vectors') updateVectorLab();
+            else if (tabId === 'transforms') updateCube();
+            else if (tabId === 'solve') recreateSolveGrid();
+            else if (tabId === 'decompose') recreateDecomposeGrid();
+            else if (tabId === 'spectral') recreateSpectralGrid();
+            else if (tabId === 'statistics') drawPCACanvas();
+            else if (tabId === 'sandbox') resizeSandboxGrid();
+        }
+
+        function filterDocs() {
+            const query = document.getElementById('sidebar-search').value.toLowerCase();
+            document.querySelectorAll('.menu-link').forEach(link => {
+                const text = link.innerText.toLowerCase();
+                const section = link.parentElement.querySelector('.menu-section-title')?.innerText.toLowerCase() || "";
+                if (text.includes(query) || section.includes(query)) {
+                    link.style.display = 'block';
+                } else {
+                    link.style.display = 'none';
+                }
+            });
+        }
+
+        // --- Vector Lab Code ---
+        function setVectorLabMode(mode) {
+            vectorLabMode = mode;
+            document.getElementById('btn-mode-proj').className = mode === 'projection' ? 'btn-mode active' : 'btn-mode';
+            document.getElementById('btn-mode-refr').className = mode === 'refraction' ? 'btn-mode active' : 'btn-mode';
+            document.getElementById('ctrl-projection').style.display = mode === 'projection' ? 'block' : 'none';
+            document.getElementById('ctrl-refraction').style.display = mode === 'refraction' ? 'block' : 'none';
+            
+            // Show/hide elements
+            const isProj = mode === 'projection';
+            document.getElementById('vec-b').style.display = isProj ? 'block' : 'none';
+            document.getElementById('vec-proj').style.display = isProj ? 'block' : 'none';
+            document.getElementById('vec-helper').style.display = isProj ? 'block' : 'none';
+            document.getElementById('vec-axis').style.display = isProj ? 'block' : 'none';
+            document.getElementById('vec-a').style.display = isProj ? 'block' : 'none';
+            
+            document.getElementById('normal-line').style.display = isProj ? 'none' : 'block';
+            document.getElementById('medium2-rect').style.display = isProj ? 'none' : 'block';
+            document.getElementById('ray-inc').style.display = isProj ? 'none' : 'block';
+            document.getElementById('ray-refl').style.display = isProj ? 'none' : 'block';
+            document.getElementById('ray-refr').style.display = isProj ? 'none' : 'block';
+            
+            updateVectorLab();
+        }
+
+        async function updateVectorLab() {
+            if (vectorLabMode === 'projection') {
+                const aAng = parseFloat(document.getElementById('slider-vec-a-ang').value) * Math.PI / 180;
+                const aMag = parseFloat(document.getElementById('slider-vec-a-mag').value);
+                const bAng = parseFloat(document.getElementById('slider-vec-b-ang').value) * Math.PI / 180;
+                const bMag = parseFloat(document.getElementById('slider-vec-b-mag').value);
+
+                document.getElementById('val-vec-a-ang').innerText = document.getElementById('slider-vec-a-ang').value + '°';
+                document.getElementById('val-vec-a-mag').innerText = document.getElementById('slider-vec-a-mag').value;
+                document.getElementById('val-vec-b-ang').innerText = document.getElementById('slider-vec-b-ang').value + '°';
+                document.getElementById('val-vec-b-mag').innerText = document.getElementById('slider-vec-b-mag').value;
+
+                const ax = aMag * Math.cos(aAng);
+                const ay = -aMag * Math.sin(aAng);
+                const bx = bMag * Math.cos(bAng);
+                const by = -bMag * Math.sin(bAng);
+
+                document.getElementById('vec-a').setAttribute('x2', ax);
+                document.getElementById('vec-a').setAttribute('y2', ay);
+                document.getElementById('vec-b').setAttribute('x2', bx);
+                document.getElementById('vec-b').setAttribute('y2', by);
+
+                if (bMag > 0) {
+                    const nx = bx / bMag; const ny = by / bMag;
+                    document.getElementById('vec-axis').setAttribute('x1', -nx * 180);
+                    document.getElementById('vec-axis').setAttribute('y1', -ny * 180);
+                    document.getElementById('vec-axis').setAttribute('x2', nx * 180);
+                    document.getElementById('vec-axis').setAttribute('y2', ny * 180);
+                }
+
+                const res = await fetchAPI('project', { ax, ay: -ay, bx, by: -by }, (p) => {
+                    const dot = p.ax * p.bx + p.ay * p.by;
+                    const b_len_sq = p.bx * p.bx + p.by * p.by;
+                    const factor = b_len_sq > 1e-6 ? dot / b_len_sq : 0;
+                    return { status: "success", px: p.bx * factor, py: p.by * factor, dot, b_len_sq };
+                });
+
+                const px = res.px; const py = -res.py;
+                document.getElementById('vec-proj').setAttribute('x2', px);
+                document.getElementById('vec-proj').setAttribute('y2', py);
+                document.getElementById('vec-helper').setAttribute('x1', ax);
+                document.getElementById('vec-helper').setAttribute('y1', ay);
+                document.getElementById('vec-helper').setAttribute('x2', px);
+                document.getElementById('vec-helper').setAttribute('y2', py);
+
+                document.getElementById('vector-equation-block').innerHTML = `
+                    <div class="eq-line"><span>Vector A</span> = (${(ax/100).toFixed(2)}, ${(-ay/100).toFixed(2)})</div>
+                    <div class="eq-line"><span>Vector B</span> = (${(bx/100).toFixed(2)}, ${(-by/100).toFixed(2)})</div>
+                    <div class="eq-line"><span>A · B</span> = ${(res.dot/10000).toFixed(3)}</div>
+                    <div class="eq-line"><span>Project(A, B)</span> = (${(px/100).toFixed(2)}, ${(-py/100).toFixed(2)})</div>
+                `;
+            } else {
+                const rayAngDeg = parseFloat(document.getElementById('slider-ray-ang').value);
+                const rayAng = rayAngDeg * Math.PI / 180;
+                const n1 = parseFloat(document.getElementById('slider-ray-n1').value) / 10;
+                const n2 = parseFloat(document.getElementById('slider-ray-n2').value) / 10;
+
+                document.getElementById('val-ray-ang').innerText = rayAngDeg + '°';
+                document.getElementById('val-ray-n1').innerText = n1.toFixed(1);
+                document.getElementById('val-ray-n2').innerText = n2.toFixed(1);
+
+                const ix = Math.sin(rayAng); const iy = Math.cos(rayAng);
+                const rayLen = 130;
+                document.getElementById('ray-inc').setAttribute('x1', -ix * rayLen);
+                document.getElementById('ray-inc').setAttribute('y1', -iy * rayLen);
+                document.getElementById('ray-inc').setAttribute('x2', 0);
+                document.getElementById('ray-inc').setAttribute('y2', 0);
+
+                const eta = n1 / n2;
+
+                const res = await fetchAPI('refract', { ix, iy: -iy, iz: 0, nx: 0, ny: 1, nz: 0, eta }, (p) => {
+                    const sinTheta2 = p.eta * p.ix;
+                    if (Math.abs(sinTheta2) > 1.0) return { status: "success", rx: p.ix, ry: p.iy, tir: true };
+                    const cosTheta2 = Math.sqrt(1.0 - sinTheta2 * sinTheta2);
+                    return { status: "success", rx: p.ix, ry: p.iy, refr_x: sinTheta2, refr_y: -cosTheta2, tir: false };
+                });
+
+                const rx = res.rx; const ry = -res.ry;
+                document.getElementById('ray-refl').setAttribute('x2', rx * rayLen);
+                document.getElementById('ray-refl').setAttribute('y2', ry * rayLen);
+
+                if (res.tir) {
+                    document.getElementById('ray-refr').style.display = 'none';
+                } else {
+                    document.getElementById('ray-refr').style.display = 'block';
+                    document.getElementById('ray-refr').setAttribute('x2', res.refr_x * rayLen);
+                    document.getElementById('ray-refr').setAttribute('y2', -res.refr_y * rayLen);
+                }
+
+                document.getElementById('vector-equation-block').innerHTML = `
+                    <div class="eq-line"><span>η = n₁ / n₂</span> = ${eta.toFixed(3)}</div>
+                    <div class="eq-line"><span>Incident Vector</span> = (${ix.toFixed(2)}, ${(-iy).toFixed(2)})</div>
+                    <div class="eq-line"><span>Reflected Vector</span> = (${rx.toFixed(2)}, ${(-ry).toFixed(2)})</div>
+                    <div class="eq-line"><span>Refracted Vector</span> = ${res.tir ? 'Total Internal Reflection' : `(${res.refr_x.toFixed(2)}, ${res.refr_y.toFixed(2)})`}</div>
+                `;
+            }
+        }
+
+        // --- TRS 3D Cube Canvas ---
+        function multiplyMatrixVector(m, v) {
+            const out = [0, 0, 0, 0];
+            for (let i = 0; i < 4; i++) {
+                out[i] = m[i][0]*v[0] + m[i][1]*v[1] + m[i][2]*v[2] + m[i][3]*v[3];
+            }
+            return out;
+        }
+
+        async function updateCube() {
+            const tx = parseFloat(sliderTx.value);
+            const ry = parseFloat(sliderRy.value) * Math.PI / 180;
+            const rx = parseFloat(sliderRx.value) * Math.PI / 180;
+            const scale = parseFloat(sliderScale.value) / 10;
+
+            document.getElementById('val-tx').innerText = (tx/10).toFixed(1);
+            document.getElementById('val-ry').innerText = sliderRy.value + '°';
+            document.getElementById('val-rx').innerText = sliderRx.value + '°';
+            document.getElementById('val-scale').innerText = scale.toFixed(1);
+
+            const res = await fetchAPI('transform', {
+                tx: tx/20, ty: 0.0, tz: 0.0, rx, ry, rz: 0.0, sx: scale, sy: scale, sz: scale
+            }, (p) => {
+                const cosY = Math.cos(p.ry); const sinY = Math.sin(p.ry);
+                const cosX = Math.cos(p.rx); const sinX = Math.sin(p.rx);
+                return {
+                    status: "success",
+                    matrix: [
+                        [cosY*p.sx, sinY*sinX*p.sy, sinY*cosX*p.sz, p.tx],
+                        [0, cosX*p.sy, -sinX*p.sz, p.ty],
+                        [-sinY*p.sx, cosY*sinX*p.sy, cosY*cosX*p.sz, p.tz],
+                        [0, 0, 0, 1]
+                    ]
+                };
+            });
+
+            const trsMat = res.matrix;
+            let mStr = "";
+            for (let r = 0; r < 4; r++) {
+                mStr += "[ ";
+                for (let c = 0; c < 4; c++) mStr += (trsMat[r][c] >= 0 ? " " : "") + trsMat[r][c].toFixed(2) + "  ";
+                mStr = mStr.trim() + " ]\n";
+            }
+            document.getElementById('matrix-display').innerText = mStr;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#111827'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(canvas.width/2, 0); ctx.lineTo(canvas.width/2, canvas.height); ctx.moveTo(0, canvas.height/2); ctx.lineTo(canvas.width, canvas.height/2); ctx.stroke();
+
+            const projected = [];
+            const distance = 4; const scaleProj = 120;
+            for (let i = 0; i < vertices.length; i++) {
+                const v = [...vertices[i], 1.0];
+                const transformed = multiplyMatrixVector(trsMat, v);
+                const z = transformed[2] + distance;
+                let x2d = (transformed[0] / z) * scaleProj + canvas.width / 2;
+                let y2d = (transformed[1] / z) * scaleProj + canvas.height / 2;
+                projected.push([x2d, y2d]);
+            }
+
+            ctx.strokeStyle = 'var(--accent-cyan)'; ctx.lineWidth = 2;
+            for (let i = 0; i < edges.length; i++) {
+                const p0 = projected[edges[i][0]]; const p1 = projected[edges[i][1]];
+                ctx.beginPath(); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke();
+            }
+        }
+
+        // --- Linear Solver ---
+        function recreateSolveGrid() {
+            const dim = parseInt(document.getElementById('solve-dim').value);
+            const container = document.getElementById('solve-matrix-container');
+            container.style.gridTemplateColumns = `repeat(${dim}, 1fr)`;
+            container.innerHTML = '';
+            for (let r = 0; r < dim; r++) {
+                for (let c = 0; c < dim; c++) {
+                    const cell = document.createElement('input');
+                    cell.type = 'number'; cell.step = 'any'; cell.className = 'matrix-input-cell';
+                    cell.id = `solve-a-${r}-${c}`; cell.value = (r === c) ? 1 : 0;
+                    container.appendChild(cell);
+                }
+            }
+            const vecContainer = document.getElementById('solve-vector-container');
+            vecContainer.innerHTML = '';
+            for (let r = 0; r < dim; r++) {
+                const cell = document.createElement('input');
+                cell.type = 'number'; cell.step = 'any'; cell.className = 'matrix-input-cell';
+                cell.id = `solve-b-${r}`; cell.value = r + 1;
+                vecContainer.appendChild(cell);
+            }
+            applySolvePreset();
+        }
+
+        function applySolvePreset() {
+            const preset = document.getElementById('solve-preset').value;
+            const dim = parseInt(document.getElementById('solve-dim').value);
+            if (preset === 'unique') {
+                for(let r=0; r<dim; r++) {
+                    for(let c=0; c<dim; c++) {
+                        document.getElementById(`solve-a-${r}-${c}`).value = (r === c) ? 2.0 + r : 1.0;
+                    }
+                    document.getElementById(`solve-b-${r}`).value = (r + 3);
+                }
+            } else if (preset === 'singular') {
+                for(let r=0; r<dim; r++) {
+                    for(let c=0; c<dim; c++) {
+                        document.getElementById(`solve-a-${r}-${c}`).value = (r === 0 || r === 1) ? c + 1 : 2*(c + 1);
+                    }
+                    document.getElementById(`solve-b-${r}`).value = r + 1;
+                }
+            } else if (preset === 'hilbert') {
+                for(let r=0; r<dim; r++) {
+                    for(let c=0; c<dim; c++) {
+                        document.getElementById(`solve-a-${r}-${c}`).value = (1.0 / (r + c + 1)).toFixed(4);
+                    }
+                    document.getElementById(`solve-b-${r}`).value = 1.0;
+                }
+            }
+        }
+
+        async function solveLinearSystem() {
+            const dim = parseInt(document.getElementById('solve-dim').value);
+            const matrix = [];
+            for (let r = 0; r < dim; r++) {
+                const row = [];
+                for (let c = 0; c < dim; c++) {
+                    row.push(parseFloat(document.getElementById(`solve-a-${r}-${c}`).value) || 0.0);
+                }
+                matrix.push(row);
+            }
+            const b = [];
+            for (let r = 0; r < dim; r++) {
+                b.push(parseFloat(document.getElementById(`solve-b-${r}`).value) || 0.0);
+            }
+
+            const res = await fetchAPI('solve', { matrix, b }, (p) => {
+                if (dim === 2) {
+                    const A = p.matrix;
+                    const det = A[0][0]*A[1][1] - A[0][1]*A[1][0];
+                    if (Math.abs(det) < 1e-9) return { status: "success", solve_error: "Singular Matrix (Javascript Fallback)" };
+                    const x = [
+                        (p.b[0]*A[1][1] - A[0][1]*p.b[1]) / det,
+                        (A[0][0]*p.b[1] - p.b[0]*A[1][0]) / det
+                    ];
+                    return { status: "success", x, ref: A, rref: [[1,0],[0,1]] };
+                }
+                return { status: "success", solve_error: "Local JS fallback only supports 2x2. Please start python server to run C++ math engine." };
+            });
+
+            const panel = document.getElementById('solve-result-panel');
+            if (res.solve_error) {
+                panel.innerHTML = `<span style="color:var(--accent-rose);">Error: ${res.solve_error}</span>`;
+                return;
+            }
+
+            let html = `<div class="eq-line"><span>Linear Solver Output:</span></div>`;
+            html += `<div class="eq-line">Solution Vector x = [ ${res.x.map(val => val.toFixed(4)).join(', ')} ]</div>`;
+            html += `<div class="eq-line" style="margin-top:0.8rem;"><span>Row Echelon Form (REF):</span></div>`;
+            html += formatMatrixHTML(res.ref);
+            html += `<div class="eq-line" style="margin-top:0.8rem;"><span>Reduced Row Echelon Form (RREF):</span></div>`;
+            html += formatMatrixHTML(res.rref);
+            panel.innerHTML = html;
+        }
+
+        // Helper to format matrix beautifully
+        function formatMatrixHTML(mat) {
+            if (!mat) return "";
+            const rows = mat.length; const cols = mat[0].length;
+            let html = `<div class="output-matrix-container"><div class="output-matrix" style="grid-template-columns: repeat(${cols}, 1fr);">`;
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    html += `<div class="output-cell">${mat[r][c].toFixed(3)}</div>`;
+                }
+            }
+            html += `</div></div>`;
+            return html;
+        }
+
+        // --- Decompositions Lab ---
+        function recreateDecomposeGrid() {
+            const container = document.getElementById('decomp-matrix-container');
+            container.style.gridTemplateColumns = "repeat(3, 1fr)";
+            container.innerHTML = '';
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 3; c++) {
+                    const cell = document.createElement('input');
+                    cell.type = 'number'; cell.step = 'any'; cell.className = 'matrix-input-cell';
+                    cell.id = `decomp-cell-${r}-${c}`; cell.value = (r === c) ? 3 + r : 1;
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        function applyDecompPreset() {
+            const preset = document.getElementById('decomp-preset').value;
+            if (preset === 'sym') {
+                const vals = [[4, 2, 1], [2, 5, 2], [1, 2, 6]];
+                for (let r = 0; r < 3; r++) {
+                    for (let c = 0; c < 3; c++) {
+                        document.getElementById(`decomp-cell-${r}-${c}`).value = vals[r][c];
+                    }
+                }
+            } else if (preset === 'hilb') {
+                for (let r = 0; r < 3; r++) {
+                    for (let c = 0; c < 3; c++) {
+                        document.getElementById(`decomp-cell-${r}-${c}`).value = (1.0 / (r + c + 1)).toFixed(4);
+                    }
+                }
+            } else {
+                for (let r = 0; r < 3; r++) {
+                    for (let c = 0; c < 3; c++) {
+                        document.getElementById(`decomp-cell-${r}-${c}`).value = Math.floor(Math.random() * 8) - 3;
+                    }
+                }
+            }
+        }
+
+        async function decomposeMatrix() {
+            const method = document.getElementById('decomp-method').value;
+            const matrix = [];
+            for (let r = 0; r < 3; r++) {
+                const row = [];
+                for (let c = 0; c < 3; c++) {
+                    row.push(parseFloat(document.getElementById(`decomp-cell-${r}-${c}`).value) || 0.0);
+                }
+                matrix.push(row);
+            }
+
+            const res = await fetchAPI('decompose', { method, matrix }, (p) => {
+                return { status: "success", decomp_error: "Local JS fallback only supports 2x2. Please start python server to run C++ math engine." };
+            });
+
+            const panel = document.getElementById('decomp-result-panel');
+            if (res.decomp_error) {
+                panel.innerHTML = `<span style="color:var(--accent-rose);">${res.decomp_error}</span>`;
+                return;
+            }
+
+            let html = `<div class="eq-line"><span>Method: ${method.toUpperCase()} Decomposition</span></div><div class="matrix-expr">`;
+            if (method === 'lu') {
+                html += `<span>L = </span>` + formatMatrixHTML(res.L);
+                html += `<span>U = </span>` + formatMatrixHTML(res.U);
+            } else if (method === 'lup') {
+                html += `<span>L = </span>` + formatMatrixHTML(res.L);
+                html += `<span>U = </span>` + formatMatrixHTML(res.U);
+                html += `<span>P = [ ${res.P.join(', ')} ]</span>`;
+            } else if (method === 'qr') {
+                html += `<span>Q = </span>` + formatMatrixHTML(res.Q);
+                html += `<span>R = </span>` + formatMatrixHTML(res.R);
+            } else if (method === 'cholesky') {
+                html += `<span>L = </span>` + formatMatrixHTML(res.L);
+            } else if (method === 'ldlt') {
+                html += `<span>L = </span>` + formatMatrixHTML(res.L);
+                html += `<span>D = </span>` + formatMatrixHTML(res.D);
+            }
+            html += `</div>`;
+            panel.innerHTML = html;
+        }
+
+        // --- Spectral Lab ---
+        function recreateSpectralGrid() {
+            const container = document.getElementById('spectral-matrix-container');
+            container.style.gridTemplateColumns = "repeat(3, 1fr)";
+            container.innerHTML = '';
+            for (let r = 0; r < 3; r++) {
+                for (let c = 0; c < 3; c++) {
+                    const cell = document.createElement('input');
+                    cell.type = 'number'; cell.step = 'any'; cell.className = 'matrix-input-cell';
+                    cell.id = `spectral-cell-${r}-${c}`; cell.value = (r === c) ? 3 + r : 1;
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        function applySpectralPreset() {
+            const preset = document.getElementById('spectral-preset').value;
+            if (preset === 'sym') {
+                const vals = [[4, 1, 2], [1, 5, 0], [2, 0, 6]];
+                for (let r = 0; r < 3; r++) {
+                    for (let c = 0; c < 3; c++) {
+                        document.getElementById(`spectral-cell-${r}-${c}`).value = vals[r][c];
+                    }
+                }
+            } else {
+                for (let r = 0; r < 3; r++) {
+                    for (let c = 0; c < 3; c++) {
+                        document.getElementById(`spectral-cell-${r}-${c}`).value = Math.floor(Math.random() * 8) - 3;
+                    }
+                }
+            }
+        }
+
+        async function calculateEigenSvd(type) {
+            const matrix = [];
+            for (let r = 0; r < 3; r++) {
+                const row = [];
+                for (let c = 0; c < 3; c++) {
+                    row.push(parseFloat(document.getElementById(`spectral-cell-${r}-${c}`).value) || 0.0);
+                }
+                matrix.push(row);
+            }
+
+            const panel = document.getElementById('spectral-result-panel');
+            panel.innerHTML = `<span style="color:var(--accent-cyan);">Computing...</span>`;
+
+            if (type === 'eigen') {
+                const res = await fetchAPI('eigen', { matrix }, (p) => {
+                    return { status: "error", message: "Live C++ backend required for Eigen values." };
+                });
+                if (res.status === "error" || res.message) {
+                    panel.innerHTML = `<span style="color:var(--accent-rose);">${res.message || "Calculation failed"}</span>`;
+                    return;
+                }
+                panel.innerHTML = `
+                    <div class="eq-line"><span>Eigenvalues:</span></div>
+                    <div class="eq-line">[ ${res.eigenvalues.map(v => v.toFixed(4)).join(', ')} ]</div>
+                    <div class="eq-line" style="margin-top:0.8rem;"><span>Eigenvectors V (columns):</span></div>
+                    ${formatMatrixHTML(res.eigenvectors)}
+                `;
+            } else {
+                const res = await fetchAPI('svd', { matrix }, (p) => {
+                    return { status: "error", message: "Live C++ backend required for SVD." };
+                });
+                if (res.status === "error" || res.message) {
+                    panel.innerHTML = `<span style="color:var(--accent-rose);">${res.message || "Calculation failed"}</span>`;
+                    return;
+                }
+                panel.innerHTML = `
+                    <div class="eq-line"><span>Singular Values (Σ):</span></div>
+                    <div class="eq-line">[ ${res.Sigma.map(v => v.toFixed(4)).join(', ')} ]</div>
+                    <div class="eq-line" style="margin-top:0.8rem;"><span>Left Singular Vectors U:</span></div>
+                    ${formatMatrixHTML(res.U)}
+                    <div class="eq-line" style="margin-top:0.8rem;"><span>Right Singular Vectors V:</span></div>
+                    ${formatMatrixHTML(res.V)}
+                `;
+            }
+        }res.V)}
+            `;
+        }
+
+        // PCA & Regression Canvas Lab Logic
+        const pcaPoints = [];
+        let pcaOptions = { reg: true, pca: true };
+
+        function togglePCAOption(opt) {
+            pcaOptions[opt] = !pcaOptions[opt];
+            document.getElementById(`btn-fit-${opt}`).classList.toggle('active', pcaOptions[opt]);
+            drawPCACanvas();
+        }
+
+        function clearPCAPoints() {
+            pcaPoints.length = 0;
+            document.getElementById('pca-point-count').innerText = 0;
+            document.getElementById('pca-math-details').innerText = "Fit at least 2 points to start calculations.";
+            drawPCACanvas();
+        }
+
+        function handlePCACanvasClick(e) {
+            const canvas = document.getElementById('pca-canvas');
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const clickY = e.clientY - rect.top;
+
+            const scale = 40;
+            const xVal = (clickX - canvas.width/2) / scale;
+            const yVal = -(clickY - canvas.height/2) / scale;
+
+            pcaPoints.push({ x: xVal, y: yVal });
+            document.getElementById('pca-point-count').innerText = pcaPoints.length;
+            drawPCACanvas();
+        }
+
+        async function drawPCACanvas() {
+            const canvas = document.getElementById('pca-canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const scale = 40;
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+
+            ctx.strokeStyle = '#1E2433';
+            ctx.lineWidth = 1;
+            for (let x = -6; x <= 6; ++x) {
+                ctx.beginPath(); ctx.moveTo(cx + x*scale, 0); ctx.lineTo(cx + x*scale, canvas.height); ctx.stroke();
+            }
+            for (let y = -5; y <= 5; ++y) {
+                ctx.beginPath(); ctx.moveTo(0, cy + y*scale); ctx.lineTo(canvas.width, cy + y*scale); ctx.stroke();
+            }
+
+            ctx.strokeStyle = '#2D3748';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(cx, 0); ctx.lineTo(cx, canvas.height); ctx.moveTo(0, cy); ctx.lineTo(canvas.width, cy); ctx.stroke();
+
+            ctx.fillStyle = '#FFF';
+            for (let p of pcaPoints) {
+                ctx.beginPath(); ctx.arc(cx + p.x*scale, cy - p.y*scale, 5, 0, 2*Math.PI); ctx.fill();
+            }
+
+            if (pcaPoints.length < 2) return;
+
+            let regRes = null;
+            let pcaRes = null;
+
+            if (pcaOptions.reg) {
+                const matrix = pcaPoints.map(p => [p.x, 1.0]);
+                const y = pcaPoints.map(p => p.y);
+                regRes = await fetchAPI('regression', { matrix, y }, (p) => {
+                    const n = p.matrix.length;
+                    let sumX=0, sumY=0, sumXX=0, sumXY=0;
+                    for(let i=0; i<n; ++i) {
+                        sumX += p.matrix[i][0]; sumY += p.y[i];
+                        sumXX += p.matrix[i][0]*p.matrix[i][0]; sumXY += p.matrix[i][0]*p.y[i];
+                    }
+                    const denom = (n*sumXX - sumX*sumX);
+                    const slope = denom !== 0 ? (n*sumXY - sumX*sumY)/denom : 0;
+                    const intercept = (sumY - slope*sumX)/n;
+                    return { status: "success", beta: [slope, intercept] };
+                });
+            }
+
+            if (pcaOptions.pca) {
+                const matrix = pcaPoints.map(p => [p.x, p.y]);
+                pcaRes = await fetchAPI('pca', { matrix }, (p) => {
+                    const n = p.matrix.length;
+                    let mX = 0, mY = 0;
+                    for (let row of p.matrix) { mX += row[0]; mY += row[1]; }
+                    mX /= n; mY /= n;
+                    let covXX = 0, covYY = 0, covXY = 0;
+                    for (let row of p.matrix) {
+                        const dx = row[0] - mX;
+                        const dy = row[1] - mY;
+                        covXX += dx * dx; covYY += dy * dy; covXY += dx * dy;
+                    }
+                    covXX /= (n - 1); covYY /= (n - 1); covXY /= (n - 1);
+                    const tr = covXX + covYY;
+                    const det = covXX * covYY - covXY * covXY;
+                    const desc = Math.sqrt(Math.max(0, tr*tr/4 - det));
+                    const l1 = tr/2 + desc;
+                    const l2 = Math.max(0, tr/2 - desc);
+                    
+                    const v1 = [covXY, l1 - covXX];
+                    const len = Math.sqrt(v1[0]*v1[0] + v1[1]*v1[1]);
+                    if (len > 1e-5) { v1[0]/=len; v1[1]/=len; } else { v1[0]=1; v1[1]=0; }
+                    return { status: "success", explained_variance: [l1, l2], components: [[v1[0], -v1[1]], [v1[1], v1[0]]] };
+                });
+            }
+
+            if (regRes) {
+                const slope = regRes.beta[0]; const intercept = regRes.beta[1];
+                ctx.strokeStyle = 'var(--reflect)'; ctx.lineWidth = 2.5;
+                ctx.beginPath();
+                ctx.moveTo(cx - 6*scale, cy - (slope*-6+intercept)*scale);
+                ctx.lineTo(cx + 6*scale, cy - (slope*6+intercept)*scale);
+                ctx.stroke();
+            }
+
+            if (pcaRes && pcaRes.status !== "error") {
+                let mX=0, mY=0;
+                for(let p of pcaPoints) { mX+=p.x; mY+=p.y; }
+                mX/=pcaPoints.length; mY/=pcaPoints.length;
+
+                ctx.fillStyle = 'var(--project)';
+                ctx.beginPath(); ctx.arc(cx + mX*scale, cy - mY*scale, 6, 0, 2*Math.PI); ctx.fill();
+
+                const len1 = Math.sqrt(pcaRes.explained_variance[0]) * scale * 1.5;
+                ctx.strokeStyle = 'var(--vector-b)'; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.moveTo(cx + mX*scale, cy - mY*scale);
+                ctx.lineTo(cx + mX*scale + pcaRes.components[0][0]*len1, cy - mY*scale - pcaRes.components[1][0]*len1);
+                ctx.stroke();
+
+                const len2 = Math.sqrt(pcaRes.explained_variance[1]) * scale * 1.5;
+                ctx.strokeStyle = 'var(--project)'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(cx + mX*scale, cy - mY*scale);
+                ctx.lineTo(cx + mX*scale + pcaRes.components[0][1]*len2, cy - mY*scale - pcaRes.components[1][1]*len2);
+                ctx.stroke();
+            }
+
+            let infoHtml = "";
+            if (regRes) infoHtml += `<div>Regression: y = ${regRes.beta[0].toFixed(3)}x + ${regRes.beta[1].toFixed(3)}</div>`;
+            if (pcaRes && pcaRes.status !== "error") {
+                infoHtml += `<div>PC1 Variance: ${pcaRes.explained_variance[0].toFixed(3)}</div>`;
+                infoHtml += `<div>PC2 Variance: ${pcaRes.explained_variance[1].toFixed(3)}</div>`;
+            }
+            document.getElementById('pca-math-details').innerHTML = infoHtml;
+        }
+
+        // --- General Matrix Sandbox ---
+        function resizeSandboxGrid() {
+            const dim = parseInt(document.getElementById('sandbox-dim').value);
+            const grid = document.getElementById('sandbox-grid');
+            grid.style.gridTemplateColumns = `repeat(${dim}, 1fr)`;
+            grid.innerHTML = '';
+            for (let r = 0; r < dim; r++) {
+                for (let c = 0; c < dim; c++) {
+                    const cell = document.createElement('input');
+                    cell.type = 'number'; cell.step = 'any'; cell.className = 'matrix-input-cell';
+                    cell.id = `sandbox-cell-${r}-${c}`;
+                    cell.value = (r === c) ? 1.0 : 0.0;
+                    grid.appendChild(cell);
+                }
+            }
+            document.getElementById('sandbox-preset').value = '';
+        }
+
+        function loadSandboxPreset() {
+            const preset = document.getElementById('sandbox-preset').value;
+            if (!preset) return;
+            const dim = parseInt(document.getElementById('sandbox-dim').value);
+            for (let r = 0; r < dim; r++) {
+                for (let c = 0; c < dim; c++) {
+                    let val = 0.0;
+                    if (preset === 'identity') {
+                        val = (r === c) ? 1.0 : 0.0;
+                    } else if (preset === 'symmetric') {
+                        val = (r === c) ? 4.0 + r : Math.abs(r - c) + 1.0;
+                    } else if (preset === 'diagonal') {
+                        val = (r === c) ? (r + 1.0) * 2.0 : 0.0;
+                    } else if (preset === 'hilbert') {
+                        val = parseFloat((1.0 / (r + c + 1)).toFixed(5));
+                    } else if (preset === 'random') {
+                        val = Math.floor(Math.random() * 9) - 4;
+                    } else if (preset === 'zero') {
+                        val = 0.0;
+                    }
+                    document.getElementById(`sandbox-cell-${r}-${c}`).value = val;
+                }
+            }
+        }
+
+        async function runSandbox(op) {
+            const dim = parseInt(document.getElementById('sandbox-dim').value);
+            const matrix = [];
+            for (let r = 0; r < dim; r++) {
+                const row = [];
+                for (let c = 0; c < dim; c++) {
+                    row.push(parseFloat(document.getElementById(`sandbox-cell-${r}-${c}`).value) || 0.0);
+                }
+                matrix.push(row);
+            }
+
+            const panel = document.getElementById('sandbox-result-panel');
+            panel.innerHTML = `<span style="color:var(--accent-cyan);">Computing...</span>`;
+
+            if (!isServerConnected) {
+                panel.innerHTML = `<span style="color:var(--accent-rose);">Error: C++ API server not connected. Please start server.py and reload page.</span>`;
+                return;
+            }
+
+            try {
+                if (op === 'rank' || op === 'determinant' || op === 'inverse' || op === 'condition_number') {
+                    const res = await fetchAPI(op, { matrix }, (p) => { return { status: "error" }; });
+                    if (res.status !== "success") {
+                        panel.innerHTML = `<span style="color:var(--accent-rose);">Error running calculation on C++ server</span>`;
+                        return;
+                    }
+                    if (op === 'rank') {
+                        panel.innerHTML = `
+                            <div class="eq-line"><span>Operation:</span> Rank (SVD-based)</div>
+                            <div class="eq-line"><span>Result:</span> <strong style="color:var(--accent-green); font-size:1.1rem;">${res.rank}</strong></div>
+                        `;
+                    } else if (op === 'determinant') {
+                        panel.innerHTML = `
+                            <div class="eq-line"><span>Operation:</span> Determinant (LUP-based)</div>
+                            <div class="eq-line"><span>Result:</span> <strong style="color:var(--accent-green); font-size:1.1rem;">${res.determinant.toFixed(6)}</strong></div>
+                        `;
+                    } else if (op === 'inverse') {
+                        if (res.inverse_error || !res.inverse) {
+                            panel.innerHTML = `<span style="color:var(--accent-rose);">Error: Matrix is singular (determinant is zero) and cannot be inverted.</span>`;
+                        } else {
+                            panel.innerHTML = `
+                                <div class="eq-line"><span>Operation:</span> Matrix Inverse (LUP-based)</div>
+                                <div class="eq-line" style="margin-top:0.5rem;"><span>Inverse Matrix A⁻¹:</span></div>
+                                ${formatMatrixHTML(res.inverse)}
+                            `;
+                        }
+                    } else if (op === 'condition_number') {
+                        panel.innerHTML = `
+                            <div class="eq-line"><span>Operation:</span> L₂ Condition Number</div>
+                            <div class="eq-line"><span>Result:</span> <strong style="color:var(--accent-green); font-size:1.1rem;">${res.condition_number.toFixed(6)}</strong></div>
+                        `;
+                    }
+                } else if (op === 'decomp') {
+                    const res = await fetchAPI('decompose', { method: 'lup', matrix }, (p) => { return { status: "error" }; });
+                    if (res.status !== "success") {
+                        panel.innerHTML = `<span style="color:var(--accent-rose);">Error performing decomposition.</span>`;
+                        return;
+                    }
+                    panel.innerHTML = `
+                        <div class="eq-line"><span>Operation:</span> LUP Decomposition</div>
+                        <div class="eq-line" style="margin-top:0.5rem;"><span>P = [ ${res.P.join(', ')} ]</span></div>
+                        <div class="matrix-expr" style="margin-top:0.5rem;">
+                            <span>L = </span>${formatMatrixHTML(res.L)}
+                            <span>U = </span>${formatMatrixHTML(res.U)}
+                        </div>
+                    `;
+                } else if (op === 'spectral') {
+                    const res = await fetchAPI('svd', { matrix }, (p) => { return { status: "error" }; });
+                    if (res.status !== "success") {
+                        panel.innerHTML = `<span style="color:var(--accent-rose);">Error performing spectral decomposition.</span>`;
+                        return;
+                    }
+                    panel.innerHTML = `
+                        <div class="eq-line"><span>Operation:</span> Singular Value Decomposition</div>
+                        <div class="eq-line"><span>Singular Values (Σ):</span> [ ${res.Sigma.map(v => v.toFixed(4)).join(', ')} ]</div>
+                        <div class="matrix-expr" style="margin-top:0.5rem;">
+                            <span>U = </span>${formatMatrixHTML(res.U)}
+                            <span>V = </span>${formatMatrixHTML(res.V)}
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                panel.innerHTML = `<span style="color:var(--accent-rose);">Error: ${err.message}</span>`;
+            }
+        }           }
+        }
+    </script>
+</body>
+</html>
+)HTML";
+
+    file.close();
+    std::cout << "Successfully generated " << filepath << "\n";
+}// Function to animate a 3D wireframe cube rotating in the console terminal
+void RunTerminalCubeAnimation()
+{
+    // Define 3D cube vertices
+    Vec3f localVertices[8] = {
+        {-1.0f, -1.0f, -1.0f}, { 1.0f, -1.0f, -1.0f}, { 1.0f,  1.0f, -1.0f}, {-1.0f,  1.0f, -1.0f},
+        {-1.0f, -1.0f,  1.0f}, { 1.0f, -1.0f,  1.0f}, { 1.0f,  1.0f,  1.0f}, {-1.0f,  1.0f,  1.0f}
+    };
+
+    // Connections between vertices forming the 12 edges
+    std::pair<int, int> edges[12] = {
+        {0, 1}, {1, 2}, {2, 3}, {3, 0}, // Back face
+        {4, 5}, {5, 6}, {6, 7}, {7, 4}, // Front face
+        {0, 4}, {1, 5}, {2, 6}, {3, 7}  // Cross edges
+    };
+
+    int width = 80;
+    int height = 40;
+    AsciiRenderer renderer(width, height);
+
+    float angleX = 0.0f;
+    float angleY = 0.0f;
+
+    std::cout << "\033[2J"; // Clear screen
+    std::cout << "=========================================================\n";
+    std::cout << "          KAIROMATH 3D TERMINAL DEMO                     \n";
+    std::cout << "=========================================================\n";
+    std::cout << "Preparing 3D rotating cube animation in console...\n";
+    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
+    // Run for 60 frames (~3 seconds at 20fps)
+    for (int frame = 0; frame < 60; ++frame)
+    {
+        renderer.Clear();
+
+        // 3D rotation quaternion
+        angleX += 0.05f;
+        angleY += 0.08f;
+        Quaternion<float> rotation = RotationAroundX(angleX) * RotationAroundY(angleY);
+
+        // Uniform transform: rotation, scale 8.0, translation centered in viewport
+        Transformf transform(Vec3f(0.0f, 0.0f, 0.0f), rotation, Vec3f(8.0f, 8.0f, 8.0f));
+
+        // Let's project vertices into 2D screen coordinates
+        std::pair<int, int> projected[8];
+        float cameraDistance = 35.0f;
+
+        for (int i = 0; i < 8; ++i)
+        {
+            Vec3f v = TransformPoint(transform, localVertices[i]);
+            
+            // Simple camera projection
+            // x' = x / (z + d), y' = y / (z + d)
+            float depth = v.z + cameraDistance;
+            
+            // Project and scale to renderer dimensions
+            int screenX = static_cast<int>(width / 2 + (v.x / depth) * 60.0f);
+            int screenY = static_cast<int>(height / 2 + (v.y / depth) * 35.0f * 0.5f); // Aspect ratio correction
+            
+            projected[i] = {screenX, screenY};
+        }
+
+        // Draw edges
+        for (int i = 0; i < 12; ++i)
+        {
+            auto p0 = projected[edges[i].first];
+            auto p1 = projected[edges[i].second];
+            renderer.DrawLine(p0.first, p0.second, p1.first, p1.second, '#');
+        }
+
+        // Render to stdout
+        renderer.Render();
+        std::cout << "Rendering frame " << frame + 1 << "/60... Press Ctrl+C to abort.\n";
+        
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+}
+
+int main(int argc, char* argv[])
+{
+    if (argc > 1 && std::string(argv[1]) == "--api")
+    {
+        RunAPIMode();
+        return 0;
+    }
+
+    std::cout << "\n=========================================================\n";
+    std::cout << "          KAIROMATH STABILIZATION PASS                   \n";
+    std::cout << "=========================================================\n\n";
+
+    // 1. Vector operation demo checks
+    std::cout << "[Verification] Testing Project() on non-unit axis:\n";
+    Vec2f v2(2.0f, 3.0f);
+    Vec2f onto2(4.0f, 0.0f);
+    Vec2f proj2 = Project(v2, onto2);
+    std::cout << "  Project((2, 3), onto (4, 0)) = (" << proj2.x << ", " << proj2.y << ")\n\n";
+
+    std::cout << "[Verification] Testing Refract() near critical angle:\n";
+    Vec3f incident = Normalize(Vec3f(0.8f, -0.6f, 0.0f));
+    Vec3f normal(0.0f, 1.0f, 0.0f);
+    float eta1 = 1.0f / 1.5f; // air to glass
+    float eta2 = 1.5f / 1.0f; // glass to air (steep, TIR potential)
+    
+    Vec3f refr1 = Refract(incident, normal, eta1);
+    Vec3f refr2 = Refract(incident, normal, eta2);
+    
+    std::cout << "  Incident: (" << incident.x << ", " << incident.y << ", " << incident.z << ")\n";
+    std::cout << "  Refracted (air->glass): (" << refr1.x << ", " << refr1.y << ", " << refr1.z << ")\n";
+    std::cout << "  Refracted (glass->air - TIR expected): (" << refr2.x << ", " << refr2.y << ", " << refr2.z << ")\n\n";
+
+    // 2. Generate the HTML report
+    std::string htmlPath = "visual/visual_tests.html";
+    GenerateHTMLVisualizer(htmlPath);
+
+    // 3. Animate the 3D cube in terminal
+    RunTerminalCubeAnimation();
+
+    std::cout << "\n=========================================================\n";
+    std::cout << "  Visual tests generated. Run the following command:\n";
+    std::cout << "      open visual_tests.html\n";
+    std::cout << "  to interact with the math operations in your browser!\n";
+    std::cout << "=========================================================\n\n";
+
+    return 0;
+}

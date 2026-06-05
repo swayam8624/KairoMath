@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 PORT = 8080
-BINARY_PATH = os.path.join(os.path.dirname(__file__), "build", "MathVisualizer")
+BINARY_PATH = os.path.join(os.path.dirname(__file__), "..", "build", "MathVisualizer")
 
 class KairoMathHTTPHandler(http.server.SimpleHTTPRequestHandler):
     def end_headers(self):
@@ -164,6 +164,16 @@ class KairoMathHTTPHandler(http.server.SimpleHTTPRequestHandler):
             for r in matrix:
                 output += " ".join(map(str, r)) + "\n"
             output += " ".join(map(str, y)) + "\n"
+            return output
+            
+        elif endpoint in ["determinant", "inverse", "rank", "condition_number"]:
+            matrix = payload.get("matrix", [])
+            rows = len(matrix)
+            cols = len(matrix[0]) if rows > 0 else 0
+            
+            output = f"{endpoint} {rows} {cols}\n"
+            for r in matrix:
+                output += " ".join(map(str, r)) + "\n"
             return output
             
         return None

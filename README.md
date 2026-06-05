@@ -89,6 +89,23 @@ The inverse of a rotated non-uniform scale transform introduces **shear**. Becau
 ### 4. Robust Gauss-Jordan Elimination with Partial Pivoting
 For `Inverse(Matrix4)` and general linear solver functions, `KairoMath` uses Gauss-Jordan elimination with partial pivoting. This approach is highly robust against singular/near-singular matrices and provides numerical stability by finding the largest pivot element in each column to prevent division by near-zero values.
 
+### 5. Production-Grade Matrix Operations (LUP-Based)
+For arbitrary dynamically-sized matrices (`DynamicMatrix`), `KairoMath` provides LUP-decomposition-based implementations of key linear algebra operations:
+*   **`Determinant`**: Computes the determinant using LUP decomposition, tracking the sign of the permutation vector via disjoint cycle decomposition, and multiplying diagonal entries of $U$.
+*   **`Inverse`**: Inverts a square matrix by performing forward/backward substitution on LUP factors column-by-column against the identity matrix.
+*   **`Rank`**: Computes the 2-norm rank using Singular Value Decomposition with a robust tolerance scale.
+*   **`ConditionNumber`**: Computes the 2-norm condition number ($\sigma_{\max} / \sigma_{\min}$) utilizing the singular values from SVD, returning infinity for singular matrices.
+
+### 6. Upgraded Eigen Solver (Householder Reduction & Tridiagonalization)
+Symmetric eigenvalues and eigenvectors are computed using the standard production pipeline:
+1.  **Householder Reduction**: Reduces the symmetric matrix to symmetric tridiagonal form ($T = Q^T A Q$) in one pass of Householder reflections.
+2.  **Implicit QR Sweeps**: Runs the implicitly shifted symmetric QR algorithm with Wilkinson shifts directly on $T$. This reduces the complexity per iteration from $O(n^3)$ to $O(n)$.
+
+### 7. Upgraded SVD Solver (Golub-Kahan Bidiagonal SVD)
+Thin Singular Value Decomposition is computed using bidiagonalization:
+1.  **Golub-Kahan Bidiagonalization**: Alternates left and right Householder reflections to reduce a general rectangular matrix to upper bidiagonal form ($B = U_{bid}^T A V_{bid}$).
+2.  **Bidiagonal SVD**: Computes the SVD of $B$ by solving the eigenvalues of the symmetric tridiagonal matrix $T = B^T B$ using the fast tridiagonal QR algorithm, and then accumulates the left and right singular vectors.
+
 ---
 
 ## Getting Started: Compilation Guide
@@ -162,6 +179,7 @@ brew install llvm ninja cmake
 *   **Eigen & SVD Lab**: Computes eigenvalues, eigenvectors, and Singular Value Decompositions ($U \Sigma V^T$) of custom matrices.
 *   **PCA & Regression Lab**: Click on the canvas grid to add 2D data points. The C++ Statistics engine dynamically recalculates and draws the linear regression line (in pink) and principal component variance axes (in green/yellow) in real-time.
 *   **3D Transform Cube**: Adjust translation, scale, pitch, and yaw rotation sliders to rotate a 3D wireframe cube, rendering the composed TRS $4\times 4$ transformation matrix calculated by the C++ engine.
+*   **General Matrix Sandbox Lab**: Configure dynamic dimensions (from 2x2 up to 6x6), load presets (Identity, Hilbert, Symmetric, Diagonal, Random, Zero), and trigger core linear algebra operations (Rank, Determinant, Inverse, Condition Number, Decompositions, Eigen, SVD). Displays output matrices with bracket formatting and computes relative errors for mathematical verification.
 
 ---
 

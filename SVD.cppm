@@ -27,7 +27,166 @@ export namespace kairo::foundation::math
         DynamicMatrix<T> V;     // n x k
     };
 
-    /// Compute Singular Value Decomposition (thin SVD) for general rectangular matrices.
+    template<FloatingPoint T>
+    struct BidiagonalResult
+    {
+        DynamicMatrix<T> B; // Upper bidiagonal matrix
+        DynamicMatrix<T> U; // m x m orthogonal matrix
+        DynamicMatrix<T> V; // n x n orthogonal matrix
+    };
+
+    /// Reduce general m x n matrix A (with m >= n) to upper bidiagonal matrix B
+    /// using alternating left and right Householder reflections.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    BidiagonalResult<T> GolubKahanBidiagonalization(const DynamicMatrix<T>& A)
+    {
+        std::size_t m = A.Rows();
+        std::size_t n = A.Columns();
+        assert(m >= n);
+
+        DynamicMatrix<T> B = A;
+        DynamicMatrix<T> U = DynamicMatrix<T>::Identity(m);
+        DynamicMatrix<T> V = DynamicMatrix<T>::Identity(n);
+
+        for (std::size_t k = 0; k < n; ++k)
+        {
+            // --- Left Householder reflection (on columns) ---
+            std::size_t lenL = m - k;
+            std::vector<T> xL(lenL);
+            T normSqL = T(0);
+            for (std::size_t i = 0; i < lenL; ++i)
+            {
+                xL[i] = B(k + i, k);
+                normSqL += xL[i] * xL[i];
+            }
+            T normXL = std::sqrt(normSqL);
+
+            if (normXL > std::numeric_limits<T>::epsilon() * T(10))
+            {
+                T alphaL = (xL[0] >= T(0)) ? -normXL : normXL;
+                std::vector<T> u(lenL);
+                u[0] = xL[0] - alphaL;
+                for (std::size_t i = 1; i < lenL; ++i)
+                {
+                    u[i] = xL[i];
+                }
+
+                T uNormSq = T(0);
+                for (std::size_t i = 0; i < lenL; ++i) uNormSq += u[i] * u[i];
+                T uNorm = std::sqrt(uNormSq);
+                if (uNorm > std::numeric_limits<T>::epsilon() * T(10))
+                {
+                    for (std::size_t i = 0; i < lenL; ++i) u[i] /= uNorm;
+
+                    // Apply (I - 2*u*u^T) to B[k..m-1, k..n-1] from the left
+                    for (std::size_t col = k; col < n; ++col)
+                    {
+                        T dot = T(0);
+                        for (std::size_t row = 0; row < lenL; ++row)
+                        {
+                            dot += u[row] * B(k + row, col);
+                        }
+                        for (std::size_t row = 0; row < lenL; ++row)
+                        {
+                            B(k + row, col) -= T(2) * u[row] * dot;
+                        }
+                    }
+
+                    // Accumulate into U
+                    for (std::size_t row = 0; row < m; ++row)
+                    {
+                        T dot = T(0);
+                        for (std::size_t col = 0; col < lenL; ++col)
+                        {
+                            dot += U(row, k + col) * u[col];
+                        }
+                        for (std::size_t col = 0; col < lenL; ++col)
+                        {
+                            U(row, k + col) -= T(2) * dot * u[col];
+                        }
+                    }
+                }
+            }
+
+            // --- Right Householder reflection (on rows) ---
+            if (k < n - 2)
+            {
+                std::size_t lenR = n - 1 - k;
+                std::vector<T> xR(lenR);
+                T normSqR = T(0);
+                for (std::size_t i = 0; i < lenR; ++i)
+                {
+                    xR[i] = B(k, k + 1 + i);
+                    normSqR += xR[i] * xR[i];
+                }
+                T normXR = std::sqrt(normSqR);
+
+                if (normXR > std::numeric_limits<T>::epsilon() * T(10))
+                {
+                    T alphaR = (xR[0] >= T(0)) ? -normXR : normXR;
+                    std::vector<T> v(lenR);
+                    v[0] = xR[0] - alphaR;
+                    for (std::size_t i = 1; i < lenR; ++i)
+                    {
+                        v[i] = xR[i];
+                    }
+
+                    T vNormSq = T(0);
+                    for (std::size_t i = 0; i < lenR; ++i) vNormSq += v[i] * v[i];
+                    T vNorm = std::sqrt(vNormSq);
+                    if (vNorm > std::numeric_limits<T>::epsilon() * T(10))
+                    {
+                        for (std::size_t i = 0; i < lenR; ++i) v[i] /= vNorm;
+
+                        // Apply (I - 2*v*v^T) to B[k..m-1, k+1..n-1] from the right
+                        for (std::size_t row = k; row < m; ++row)
+                        {
+                            T dot = T(0);
+                            for (std::size_t col = 0; col < lenR; ++col)
+                            {
+                                dot += B(row, k + 1 + col) * v[col];
+                            }
+                            for (std::size_t col = 0; col < lenR; ++col)
+                            {
+                                B(row, k + 1 + col) -= T(2) * dot * v[col];
+                            }
+                        }
+
+                        // Accumulate into V
+                        for (std::size_t row = 0; row < n; ++row)
+                        {
+                            T dot = T(0);
+                            for (std::size_t col = 0; col < lenR; ++col)
+                            {
+                                dot += V(row, k + 1 + col) * v[col];
+                            }
+                            for (std::size_t col = 0; col < lenR; ++col)
+                            {
+                                V(row, k + 1 + col) -= T(2) * dot * v[col];
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Clean up bidiagonal elements (zero out everything else)
+        DynamicMatrix<T> cleanB = DynamicMatrix<T>::Zero(m, n);
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            cleanB(i, i) = B(i, i);
+            if (i < n - 1)
+            {
+                cleanB(i, i + 1) = B(i, i + 1);
+            }
+        }
+
+        return { cleanB, U, V };
+    }
+
+    /// Compute Singular Value Decomposition (thin SVD) using Golub-Kahan bidiagonalization
+    /// and symmetric tridiagonal QR eigenvalues.
     template<FloatingPoint T>
     [[nodiscard]]
     SVDResult<T> SingularValueDecomposition(const DynamicMatrix<T>& A)
@@ -40,25 +199,17 @@ export namespace kairo::foundation::math
 
         if (m >= n)
         {
-            // Compute A^T * A of size n x n
-            DynamicMatrix<T> ATA(n, n, T(0));
-            for (std::size_t r = 0; r < n; ++r)
-            {
-                for (std::size_t c = 0; c < n; ++c)
-                {
-                    T sum = T(0);
-                    for (std::size_t i = 0; i < m; ++i)
-                    {
-                        sum += A(i, r) * A(i, c);
-                    }
-                    ATA(r, c) = sum;
-                }
-            }
+            // 1. Golub-Kahan Bidiagonalization
+            BidiagonalResult<T> bid = GolubKahanBidiagonalization(A);
 
-            // Eigenvalues and eigenvectors of A^T * A
-            QREigenResult<T> eigenResult = QREigenVectors(ATA);
+            // 2. Compute T = B^T * B
+            DynamicMatrix<T> BT = bid.B.Transpose();
+            DynamicMatrix<T> T_mat = BT * bid.B;
 
-            // Sort eigenvalues and corresponding eigenvectors in descending order
+            // 3. Solve eigenvalues and eigenvectors of T using tridiagonal QR
+            QREigenResult<T> eigenResult = QREigenVectors(T_mat);
+
+            // 4. Sort eigenvalues and eigenvectors in descending order
             std::vector<std::size_t> indices(n);
             std::iota(indices.begin(), indices.end(), std::size_t(0));
             std::sort(indices.begin(), indices.end(), [&](std::size_t a, std::size_t b) {
@@ -66,7 +217,7 @@ export namespace kairo::foundation::math
             });
 
             std::vector<T> sortedSigma(k, T(0));
-            DynamicMatrix<T> V(n, k);
+            DynamicMatrix<T> V_tilde(n, k);
             for (std::size_t j = 0; j < k; ++j)
             {
                 std::size_t origIndex = indices[j];
@@ -75,13 +226,14 @@ export namespace kairo::foundation::math
 
                 for (std::size_t i = 0; i < n; ++i)
                 {
-                    V(i, j) = eigenResult.eigenvectors(i, origIndex);
+                    V_tilde(i, j) = eigenResult.eigenvectors(i, origIndex);
                 }
             }
 
-            // Compute U = A * V * inv(Sigma)
-            // To ensure U columns are orthonormal even for zero/small singular values,
-            // we use Gram-Schmidt orthogonalization.
+            // 5. Accumulate right singular vectors V = V_bid * V_tilde
+            DynamicMatrix<T> V = bid.V * V_tilde;
+
+            // 6. Compute U = A * V * inv(Sigma) using Gram-Schmidt basis completion for small singular values
             DynamicMatrix<T> U(m, k);
             for (std::size_t j = 0; j < k; ++j)
             {
@@ -163,7 +315,6 @@ export namespace kairo::foundation::math
 
             SVDResult<T> subResult = SingularValueDecomposition(AT);
 
-            // A^T = U_sub * Sigma_sub * V_sub^T => A = V_sub * Sigma_sub * U_sub^T
             return { subResult.V, subResult.Sigma, subResult.U };
         }
     }
@@ -254,6 +405,61 @@ export namespace kairo::foundation::math
         }
 
         return result;
+    }
+
+    /// Compute Rank of a general matrix using SVD.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    std::size_t Rank(const DynamicMatrix<T>& A)
+    {
+        if (A.Empty()) return 0;
+
+        SVDResult<T> svd = SingularValueDecomposition(A);
+        T maxSigma = T(0);
+        for (T val : svd.Sigma)
+        {
+            maxSigma = std::max(maxSigma, val);
+        }
+
+        T threshold = std::max(A.Rows(), A.Columns()) * maxSigma * std::sqrt(std::numeric_limits<T>::epsilon()) * T(10);
+        if (threshold == T(0))
+        {
+            return 0;
+        }
+
+        std::size_t r = 0;
+        for (T val : svd.Sigma)
+        {
+            if (val > threshold)
+            {
+                ++r;
+            }
+        }
+        return r;
+    }
+
+    /// Compute 2-norm Condition Number of a matrix using SVD.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    T ConditionNumber(const DynamicMatrix<T>& A)
+    {
+        if (A.Empty()) return T(1);
+
+        SVDResult<T> svd = SingularValueDecomposition(A);
+        T maxSigma = T(0);
+        T minSigma = std::numeric_limits<T>::max();
+        for (T val : svd.Sigma)
+        {
+            maxSigma = std::max(maxSigma, val);
+            minSigma = std::min(minSigma, val);
+        }
+
+        T threshold = std::max(A.Rows(), A.Columns()) * maxSigma * std::sqrt(std::numeric_limits<T>::epsilon()) * T(10);
+        if (minSigma <= threshold)
+        {
+            return std::numeric_limits<T>::infinity();
+        }
+        return maxSigma / minSigma;
     }
 
 } // namespace kairo::foundation::math

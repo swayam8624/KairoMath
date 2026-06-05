@@ -753,5 +753,137 @@ TEST_CASE("Linear Algebra Bugfixes", "[LinearAlgebraBugfixes]")
     }
 }
 
+TEST_CASE("DynamicMatrix Upgrades - Rank, Determinant, Inverse, ConditionNumber", "[DynamicMatrix][Upgrades]")
+{
+    SECTION("Determinant")
+    {
+        // 2x2 Determinant
+        DynamicMatrix<double> A(2, 2, {3.0, 8.0, 4.0, 6.0});
+        REQUIRE(std::abs(Determinant(A) - -14.0) < 1e-9);
+
+        // 3x3 Determinant
+        DynamicMatrix<double> B(3, 3, {
+            1.0, 2.0, 3.0,
+            0.0, 1.0, 4.0,
+            5.0, 6.0, 0.0
+        });
+        // det = 1*(0-24) - 2*(0-20) + 3*(0-5) = -24 + 40 - 15 = 1
+        REQUIRE(std::abs(Determinant(B) - 1.0) < 1e-9);
+
+        // Singular matrix determinant is 0
+        DynamicMatrix<double> C(3, 3, {
+            1.0, 2.0, 3.0,
+            2.0, 4.0, 6.0,
+            3.0, 5.0, 7.0
+        });
+        REQUIRE(std::abs(Determinant(C) - 0.0) < 1e-9);
+    }
+
+    SECTION("Inverse")
+    {
+        DynamicMatrix<double> A(3, 3, {
+            2.0, 1.0, 1.0,
+            1.0, 3.0, 1.0,
+            1.0, 1.0, 4.0
+        });
+        DynamicMatrix<double> invA = Inverse(A);
+        DynamicMatrix<double> identity = A * invA;
+        REQUIRE(IsIdentity(identity, 1e-9));
+    }
+
+    SECTION("Rank")
+    {
+        // Full rank 3x3
+        DynamicMatrix<double> A(3, 3, {
+            2.0, 1.0, 1.0,
+            1.0, 3.0, 1.0,
+            1.0, 1.0, 4.0
+        });
+        REQUIRE(Rank(A) == 3);
+
+        // Rank-deficient 3x3 (rank 1)
+        DynamicMatrix<double> B(3, 3, {
+            1.0, 2.0, 3.0,
+            2.0, 4.0, 6.0,
+            3.0, 6.0, 9.0
+        });
+        REQUIRE(Rank(B) == 1);
+    }
+
+    SECTION("ConditionNumber")
+    {
+        DynamicMatrix<double> I = DynamicMatrix<double>::Identity(3);
+        REQUIRE(std::abs(ConditionNumber(I) - 1.0) < 1e-9);
+
+        // Singular matrix has infinite condition number
+        DynamicMatrix<double> B(3, 3, {
+            1.0, 2.0, 3.0,
+            2.0, 4.0, 6.0,
+            3.0, 6.0, 9.0
+        });
+        REQUIRE(std::isinf(ConditionNumber(B)));
+    }
+}
+
+TEST_CASE("Eigen and SVD Advanced Decompositions", "[LinearAlgebra][Decompositions]")
+{
+    SECTION("Householder Tridiagonalization")
+    {
+        DynamicMatrix<double> A(3, 3, {
+            4.0, 1.0, -2.0,
+            1.0, 3.0, 5.0,
+            -2.0, 5.0, 6.0
+        });
+        auto tri = HouseholderTridiagonalization(A);
+        
+        // Check T is tridiagonal: T(0, 2) and T(2, 0) must be 0
+        REQUIRE(std::abs(tri.T_mat(0, 2)) < 1e-9);
+        REQUIRE(std::abs(tri.T_mat(2, 0)) < 1e-9);
+
+        // Check Q is orthogonal
+        DynamicMatrix<double> QTQ = tri.Q.Transpose() * tri.Q;
+        REQUIRE(IsIdentity(QTQ, 1e-9));
+
+        // Check Q * T * Q^T = A
+        DynamicMatrix<double> recon = tri.Q * tri.T_mat * tri.Q.Transpose();
+        REQUIRE(NearlyEqual(recon, A, 1e-9));
+    }
+
+    SECTION("Golub-Kahan Bidiagonalization")
+    {
+        DynamicMatrix<double> A(4, 3, {
+            1.0, 2.0, 3.0,
+            4.0, 5.0, 6.0,
+            7.0, 8.0, 9.0,
+            10.0, 11.0, 12.0
+        });
+        auto bid = GolubKahanBidiagonalization(A);
+
+        // B must be upper bidiagonal of size 4x3. Non-zero only on diagonal and superdiagonal.
+        for (std::size_t r = 0; r < 4; ++r)
+        {
+            for (std::size_t c = 0; c < 3; ++c)
+            {
+                if (r != c && r + 1 != c)
+                {
+                    REQUIRE(std::abs(bid.B(r, c)) < 1e-9);
+                }
+            }
+        }
+
+        // U must be 4x4 orthogonal
+        DynamicMatrix<double> UTU = bid.U.Transpose() * bid.U;
+        REQUIRE(IsIdentity(UTU, 1e-9));
+
+        // V must be 3x3 orthogonal
+        DynamicMatrix<double> VTV = bid.V.Transpose() * bid.V;
+        REQUIRE(IsIdentity(VTV, 1e-9));
+
+        // U * B * V^T = A
+        DynamicMatrix<double> recon = bid.U * bid.B * bid.V.Transpose();
+        REQUIRE(NearlyEqual(recon, A, 1e-9));
+    }
+}
+
 
 

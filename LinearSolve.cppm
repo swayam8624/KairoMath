@@ -13,6 +13,7 @@ export module Kairo.Foundation.Math.LinearAlgebra.LinearSolve;
 
 import Kairo.Foundation.Math.Vector;
 import Kairo.Foundation.Math.DynamicMatrix;
+import Kairo.Foundation.Math.LinearAlgebra.Decomposition;
 
 export namespace kairo::foundation::math
 {
@@ -347,6 +348,42 @@ export namespace kairo::foundation::math
     std::vector<T> LinearSolve(const DynamicMatrix<T>& A, const std::vector<T>& b)
     {
         return GaussianElimination(A, b);
+    }
+
+    /// Compute matrix inverse using LUP decomposition.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    DynamicMatrix<T> Inverse(const DynamicMatrix<T>& A)
+    {
+        if (A.Rows() != A.Columns())
+        {
+            throw std::invalid_argument("Matrix inversion failed: Matrix must be square.");
+        }
+        std::size_t n = A.Rows();
+        
+        LUPResult<T> lup = LUP(A); // Will throw if singular
+        
+        DynamicMatrix<T> inv(n, n);
+        for (std::size_t j = 0; j < n; ++j)
+        {
+            std::vector<T> ej(n, T(0));
+            ej[j] = T(1);
+            
+            std::vector<T> pb(n);
+            for (std::size_t i = 0; i < n; ++i)
+            {
+                pb[i] = ej[lup.P[i]];
+            }
+            
+            std::vector<T> y = ForwardSubstitution(lup.L, pb);
+            std::vector<T> xj = BackwardSubstitution(lup.U, y);
+            
+            for (std::size_t r = 0; r < n; ++r)
+            {
+                inv(r, j) = xj[r];
+            }
+        }
+        return inv;
     }
 
 } // namespace kairo::foundation::math

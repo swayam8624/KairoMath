@@ -386,8 +386,61 @@ export namespace kairo::foundation::math
                 }
             }
         }
-
         return { L, D };
+    }
+
+    /// Helper to compute the sign of a permutation vector P.
+    /// Returns +1 for even permutations, -1 for odd permutations.
+    template<typename T>
+    [[nodiscard]]
+    T PermutationSign(const std::vector<std::size_t>& P) noexcept
+    {
+        std::size_t n = P.size();
+        std::vector<bool> visited(n, false);
+        std::size_t cycles = 0;
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            if (!visited[i])
+            {
+                ++cycles;
+                std::size_t curr = i;
+                while (!visited[curr])
+                {
+                    visited[curr] = true;
+                    curr = P[curr];
+                }
+            }
+        }
+        return ((n - cycles) % 2 == 0) ? T(1) : T(-1);
+    }
+
+    /// Compute determinant of a square matrix using LUP decomposition.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    T Determinant(const DynamicMatrix<T>& A)
+    {
+        if (A.Rows() != A.Columns())
+        {
+            throw std::invalid_argument("Determinant failed: Matrix must be square.");
+        }
+        std::size_t n = A.Rows();
+        if (n == 0) return T(1);
+
+        try
+        {
+            LUPResult<T> lup = LUP(A);
+            T det = PermutationSign<T>(lup.P);
+            for (std::size_t i = 0; i < n; ++i)
+            {
+                det *= lup.U(i, i);
+            }
+            return det;
+        }
+        catch (const std::runtime_error&)
+        {
+            // LUP throws if matrix is singular (pivot <= threshold)
+            return T(0);
+        }
     }
 
 } // namespace kairo::foundation::math

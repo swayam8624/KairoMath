@@ -228,86 +228,183 @@ export namespace kairo::foundation::math
         return { subResult.eigenvalue + shift, subResult.eigenvector };
     }
 
-    /// QR Algorithm to find all eigenvalues of a symmetric matrix using Wilkinson shifts and deflation.
+    template<FloatingPoint T>
+    struct TridiagonalResult
+    {
+        DynamicMatrix<T> T_mat;
+        DynamicMatrix<T> Q;
+    };
+
+    /// Reduce a symmetric matrix to symmetric tridiagonal form using Householder reflections.
     template<FloatingPoint T>
     [[nodiscard]]
-    std::vector<T> QREigenValues(
-        const DynamicMatrix<T>& A,
-        std::size_t maxIterations = 1000,
-        T tolerance = std::numeric_limits<T>::epsilon() * T(1e4))
+    TridiagonalResult<T> HouseholderTridiagonalization(const DynamicMatrix<T>& A)
     {
-        assert(A.Rows() == A.Columns());
-        std::size_t n = A.Rows();
-
-        DynamicMatrix<T> Ak = A;
-        std::vector<T> eigenvalues(n, T(0));
-
-        std::size_t activeN = n;
-        while (activeN > 1)
+        if (A.Rows() != A.Columns())
         {
-            std::size_t iter = 0;
-            while (iter < maxIterations)
+            throw std::invalid_argument("Tridiagonalization failed: Matrix must be square.");
+        }
+        std::size_t n = A.Rows();
+        DynamicMatrix<T> Q = DynamicMatrix<T>::Identity(n);
+        DynamicMatrix<T> T_mat = A;
+
+        for (std::size_t k = 0; k < n - 2; ++k)
+        {
+            // Vector x is T_mat[k+1..n-1, k]
+            std::size_t len = n - 1 - k;
+            std::vector<T> x(len);
+            T normSq = T(0);
+            for (std::size_t i = 0; i < len; ++i)
             {
-                T offDiag = std::abs(Ak(activeN - 1, activeN - 2));
-                T scale = std::abs(Ak(activeN - 1, activeN - 1)) + std::abs(Ak(activeN - 2, activeN - 2));
-                if (scale == T(0)) scale = T(1);
-
-                if (offDiag <= scale * tolerance)
-                {
-                    Ak(activeN - 1, activeN - 2) = T(0);
-                    Ak(activeN - 2, activeN - 1) = T(0);
-                    break;
-                }
-
-                // Wilkinson shift
-                T a = Ak(activeN - 2, activeN - 2);
-                T b = Ak(activeN - 1, activeN - 2);
-                T c = Ak(activeN - 1, activeN - 1);
-                T delta = (a - c) / T(2);
-                T shift = c;
-                if (delta != T(0) || b != T(0))
-                {
-                    T denom = std::abs(delta) + std::sqrt(delta * delta + b * b);
-                    T sign = (delta >= T(0)) ? T(1) : T(-1);
-                    shift = c - (sign * b * b) / denom;
-                }
-
-                // Active submatrix
-                DynamicMatrix<T> activeAk(activeN, activeN);
-                for (std::size_t r = 0; r < activeN; ++r)
-                {
-                    for (std::size_t col = 0; col < activeN; ++col)
-                    {
-                        activeAk(r, col) = Ak(r, col);
-                        if (r == col) activeAk(r, col) -= shift;
-                    }
-                }
-
-                QRResult<T> qr = QR(activeAk);
-
-                // Update Ak active part
-                DynamicMatrix<T> nextActive = qr.R * qr.Q;
-                for (std::size_t r = 0; r < activeN; ++r)
-                {
-                    for (std::size_t col = 0; col < activeN; ++col)
-                    {
-                        Ak(r, col) = nextActive(r, col);
-                        if (r == col) Ak(r, col) += shift;
-                    }
-                }
-
-                ++iter;
+                x[i] = T_mat(k + 1 + i, k);
+                normSq += x[i] * x[i];
+            }
+            T normX = std::sqrt(normSq);
+            if (normX <= std::numeric_limits<T>::epsilon() * T(10))
+            {
+                continue;
             }
 
-            eigenvalues[activeN - 1] = Ak(activeN - 1, activeN - 1);
-            --activeN;
+            T alpha = (x[0] >= T(0)) ? -normX : normX;
+            std::vector<T> v(len);
+            v[0] = x[0] - alpha;
+            for (std::size_t i = 1; i < len; ++i)
+            {
+                v[i] = x[i];
+            }
+
+            T vNormSq = T(0);
+            for (std::size_t i = 0; i < len; ++i) vNormSq += v[i] * v[i];
+            T vNorm = std::sqrt(vNormSq);
+            if (vNorm > std::numeric_limits<T>::epsilon() * T(10))
+            {
+                for (std::size_t i = 0; i < len; ++i) v[i] /= vNorm;
+            }
+            else
+            {
+                continue;
+            }
+
+            // Apply Householder reflection from both sides to the submatrix T_mat[k+1..n-1, k+1..n-1]
+            // p = 2 * T_mat[k+1..n-1, k+1..n-1] * v
+            std::vector<T> p(len, T(0));
+            for (std::size_t i = 0; i < len; ++i)
+            {
+                T sum = T(0);
+                for (std::size_t j = 0; j < len; ++j)
+                {
+                    sum += T_mat(k + 1 + i, k + 1 + j) * v[j];
+                }
+                p[i] = T(2) * sum;
+            }
+
+            // w = p - (p^T * v) * v
+            T pv = T(0);
+            for (std::size_t i = 0; i < len; ++i) pv += p[i] * v[i];
+            std::vector<T> w(len);
+            for (std::size_t i = 0; i < len; ++i)
+            {
+                w[i] = p[i] - pv * v[i];
+            }
+
+            // Update submatrix T_mat = T_mat - v * w^T - w * v^T
+            for (std::size_t i = 0; i < len; ++i)
+            {
+                for (std::size_t j = 0; j < len; ++j)
+                {
+                    T_mat(k + 1 + i, k + 1 + j) -= v[i] * w[j] + w[i] * v[j];
+                }
+            }
+
+            T_mat(k + 1, k) = alpha;
+            T_mat(k, k + 1) = alpha;
+            for (std::size_t i = k + 2; i < n; ++i)
+            {
+                T_mat(i, k) = T(0);
+                T_mat(k, i) = T(0);
+            }
+
+            // Update Q: Q = Q * H_k => Q[:, k+1..n-1] = Q[:, k+1..n-1] * (I - 2*v*v^T)
+            for (std::size_t row = 0; row < n; ++row)
+            {
+                T dot = T(0);
+                for (std::size_t col = 0; col < len; ++col)
+                {
+                    dot += Q(row, k + 1 + col) * v[col];
+                }
+                for (std::size_t col = 0; col < len; ++col)
+                {
+                    Q(row, k + 1 + col) -= T(2) * dot * v[col];
+                }
+            }
         }
 
-        eigenvalues[0] = Ak(0, 0);
-        return eigenvalues;
+        return { T_mat, Q };
     }
 
-    /// QR Algorithm to find all eigenvalues and eigenvectors (for symmetric matrices) using Wilkinson shifts and deflation.
+    /// Run one Implicit QR step on symmetric tridiagonal matrix T_mat and eigenvectors V.
+    template<typename T>
+    void ImplicitQRStep(DynamicMatrix<T>& T_mat, DynamicMatrix<T>& V, std::size_t l, std::size_t m)
+    {
+        T d1 = T_mat(m - 1, m - 1);
+        T d2 = T_mat(m, m);
+        T e1 = T_mat(m - 1, m);
+        T delta = (d1 - d2) / T(2);
+        T shift = d2;
+        if (delta != T(0) || e1 != T(0))
+        {
+            T denom = std::abs(delta) + std::sqrt(delta * delta + e1 * e1);
+            T sign = (delta >= T(0)) ? T(1) : T(-1);
+            shift = d2 - (sign * e1 * e1) / denom;
+        }
+
+        T x = T_mat(l, l) - shift;
+        T z = T_mat(l + 1, l);
+
+        for (std::size_t k = l; k < m; ++k)
+        {
+            T c = T(1), s = T(0);
+            if (std::abs(z) > T(0))
+            {
+                T r = std::hypot(x, z);
+                c = x / r;
+                s = -z / r;
+            }
+
+            // Apply Givens rotation to T_mat (left and right)
+            for (std::size_t j = 0; j < T_mat.Columns(); ++j)
+            {
+                T r1 = T_mat(k, j);
+                T r2 = T_mat(k + 1, j);
+                T_mat(k, j) = c * r1 - s * r2;
+                T_mat(k + 1, j) = s * r1 + c * r2;
+            }
+            for (std::size_t i = 0; i < T_mat.Rows(); ++i)
+            {
+                T c1 = T_mat(i, k);
+                T c2 = T_mat(i, k + 1);
+                T_mat(i, k) = c * c1 - s * c2;
+                T_mat(i, k + 1) = s * c1 + c * c2;
+            }
+
+            // Accumulate into V
+            for (std::size_t i = 0; i < V.Rows(); ++i)
+            {
+                T c1 = V(i, k);
+                T c2 = V(i, k + 1);
+                V(i, k) = c * c1 - s * c2;
+                V(i, k + 1) = s * c1 + c * c2;
+            }
+
+            if (k < m - 1)
+            {
+                x = T_mat(k + 1, k);
+                z = T_mat(k + 2, k);
+            }
+        }
+    }
+
+    /// Find all eigenvalues and eigenvectors of a symmetric matrix using Tridiagonalization and Implicit QR.
     template<FloatingPoint T>
     [[nodiscard]]
     QREigenResult<T> QREigenVectors(
@@ -317,96 +414,83 @@ export namespace kairo::foundation::math
     {
         assert(A.Rows() == A.Columns());
         std::size_t n = A.Rows();
+        if (n == 0) return { {}, {} };
+        if (n == 1) return { {A(0, 0)}, DynamicMatrix<T>::Identity(1) };
 
-        DynamicMatrix<T> Ak = A;
-        DynamicMatrix<T> V = DynamicMatrix<T>::Identity(n);
-        std::vector<T> eigenvalues(n, T(0));
+        // 1. Tridiagonalization
+        TridiagonalResult<T> tri = HouseholderTridiagonalization(A);
+        DynamicMatrix<T> T_mat = tri.T_mat;
+        DynamicMatrix<T> V = tri.Q;
 
+        // 2. Implicit symmetric QR on tridiagonal matrix
         std::size_t activeN = n;
         while (activeN > 1)
         {
             std::size_t iter = 0;
             while (iter < maxIterations)
             {
-                T offDiag = std::abs(Ak(activeN - 1, activeN - 2));
-                T scale = std::abs(Ak(activeN - 1, activeN - 1)) + std::abs(Ak(activeN - 2, activeN - 2));
+                T offDiag = std::abs(T_mat(activeN - 1, activeN - 2));
+                T scale = std::abs(T_mat(activeN - 1, activeN - 1)) + std::abs(T_mat(activeN - 2, activeN - 2));
                 if (scale == T(0)) scale = T(1);
 
                 if (offDiag <= scale * tolerance)
                 {
-                    Ak(activeN - 1, activeN - 2) = T(0);
-                    Ak(activeN - 2, activeN - 1) = T(0);
+                    T_mat(activeN - 1, activeN - 2) = T(0);
+                    T_mat(activeN - 2, activeN - 1) = T(0);
                     break;
                 }
 
-                // Wilkinson shift
-                T a = Ak(activeN - 2, activeN - 2);
-                T b = Ak(activeN - 1, activeN - 2);
-                T c = Ak(activeN - 1, activeN - 1);
-                T delta = (a - c) / T(2);
-                T shift = c;
-                if (delta != T(0) || b != T(0))
+                // Find active submatrix [l..activeN-1]
+                std::size_t l = activeN - 1;
+                for (std::size_t i = activeN - 1; i > 0; --i)
                 {
-                    T denom = std::abs(delta) + std::sqrt(delta * delta + b * b);
-                    T sign = (delta >= T(0)) ? T(1) : T(-1);
-                    shift = c - (sign * b * b) / denom;
-                }
+                    T sub = std::abs(T_mat(i, i - 1));
+                    T diagScale = std::abs(T_mat(i, i)) + std::abs(T_mat(i - 1, i - 1));
+                    if (diagScale == T(0)) diagScale = T(1);
 
-                // Active submatrix
-                DynamicMatrix<T> activeAk(activeN, activeN);
-                for (std::size_t r = 0; r < activeN; ++r)
-                {
-                    for (std::size_t col = 0; col < activeN; ++col)
+                    if (sub <= diagScale * tolerance)
                     {
-                        activeAk(r, col) = Ak(r, col);
-                        if (r == col) activeAk(r, col) -= shift;
+                        T_mat(i, i - 1) = T(0);
+                        T_mat(i - 1, i) = T(0);
+                        l = i;
+                        break;
+                    }
+                    if (i == 1)
+                    {
+                        l = 0;
                     }
                 }
 
-                QRResult<T> qr = QR(activeAk);
-
-                // Update Ak active part
-                DynamicMatrix<T> nextActive = qr.R * qr.Q;
-                for (std::size_t r = 0; r < activeN; ++r)
+                if (l >= activeN - 1)
                 {
-                    for (std::size_t col = 0; col < activeN; ++col)
-                    {
-                        Ak(r, col) = nextActive(r, col);
-                        if (r == col) Ak(r, col) += shift;
-                    }
+                    break;
                 }
 
-                // Update V: V[:, 0..activeN-1] = V[:, 0..activeN-1] * qr.Q
-                DynamicMatrix<T> V_active(n, activeN, T(0));
-                for (std::size_t r = 0; r < n; ++r)
-                {
-                    for (std::size_t col = 0; col < activeN; ++col)
-                    {
-                        T sum = T(0);
-                        for (std::size_t i = 0; i < activeN; ++i)
-                        {
-                            sum += V(r, i) * qr.Q(i, col);
-                        }
-                        V_active(r, col) = sum;
-                    }
-                }
-                for (std::size_t r = 0; r < n; ++r)
-                {
-                    for (std::size_t col = 0; col < activeN; ++col)
-                    {
-                        V(r, col) = V_active(r, col);
-                    }
-                }
-
+                ImplicitQRStep(T_mat, V, l, activeN - 1);
                 ++iter;
             }
 
-            eigenvalues[activeN - 1] = Ak(activeN - 1, activeN - 1);
             --activeN;
         }
 
-        eigenvalues[0] = Ak(0, 0);
+        std::vector<T> eigenvalues(n);
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            eigenvalues[i] = T_mat(i, i);
+        }
+
         return { eigenvalues, V };
+    }
+
+    /// Find eigenvalues of a symmetric matrix.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    std::vector<T> QREigenValues(
+        const DynamicMatrix<T>& A,
+        std::size_t maxIterations = 1000,
+        T tolerance = std::numeric_limits<T>::epsilon() * T(1e4))
+    {
+        return QREigenVectors(A, maxIterations, tolerance).eigenvalues;
     }
 
 } // namespace kairo::foundation::math

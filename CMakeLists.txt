@@ -47,6 +47,6 @@ add_executable(MathTests tests/MathTests.cpp)
 target_link_libraries(MathTests PRIVATE KairoMath Catch2::Catch2WithMain)
 
 # MathVisualizer executable
-add_executable(MathVisualizer tests/VisualTests.cpp)
+add_executable(MathVisualizer visual/VisualTests.cpp)
 target_link_libraries(MathVisualizer PRIVATE KairoMath)
 
