@@ -4,6 +4,7 @@ module;
 #include <cmath>
 #include <concepts>
 #include <limits>
+#include <stdexcept>
 #include <type_traits>
 
 export module Kairo.Foundation.Math.Transform;
@@ -434,12 +435,19 @@ export namespace kairo::foundation::math
     /// an exact non-uniform-scale inverse matrix is required.
     template<FloatingPoint T>
     [[nodiscard]]
-    Transform<T> Inverse(const Transform<T>& transform) noexcept
+    Transform<T> Inverse(const Transform<T>& transform)
     {
-        assert(std::abs(transform.Scale.x) > std::numeric_limits<T>::epsilon());
-        assert(std::abs(transform.Scale.y) > std::numeric_limits<T>::epsilon());
-        assert(std::abs(transform.Scale.z) > std::numeric_limits<T>::epsilon());
-        assert(HasUniformScale(transform));
+        const T eps = std::numeric_limits<T>::epsilon() * T(10);
+        if (std::abs(transform.Scale.x) <= eps ||
+            std::abs(transform.Scale.y) <= eps ||
+            std::abs(transform.Scale.z) <= eps)
+        {
+            throw std::invalid_argument("Transform inverse failed: Scale contains zero or near-zero values.");
+        }
+        if (!HasUniformScale(transform))
+        {
+            throw std::invalid_argument("Transform inverse failed: Transform has non-uniform scale, which cannot be inverted as a TRS transform. Use WorldToLocal() or Inverse(ToMatrix4(transform)) instead.");
+        }
 
         Transform<T> result;
         result.Scale =

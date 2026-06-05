@@ -541,9 +541,20 @@ export namespace kairo::foundation::math
     [[nodiscard]]
     Vector3<T> Rotate(const Quaternion<T>& quaternion, const Vector3<T>& vector) noexcept
     {
-        const Quaternion<T> pure { vector, T(0) };
-        const Quaternion<T> result = quaternion * pure * Inverse(quaternion);
-        return { result.x, result.y, result.z };
+        const T lengthSq = quaternion.LengthSquared();
+        const T epsilon = std::numeric_limits<T>::epsilon() * T(10);
+        if (std::abs(lengthSq - T(1)) <= epsilon)
+        {
+            const Quaternion<T> pure { vector, T(0) };
+            const Quaternion<T> result = quaternion * pure * quaternion.Conjugate();
+            return { result.x, result.y, result.z };
+        }
+        else
+        {
+            const Quaternion<T> pure { vector, T(0) };
+            const Quaternion<T> result = quaternion * pure * Inverse(quaternion);
+            return { result.x, result.y, result.z };
+        }
     }
 
     /// Input: orientation quaternion. Output: local +X axis in world space.

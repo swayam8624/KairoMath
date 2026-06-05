@@ -13,10 +13,10 @@ elseif(MSVC)
 endif()
 
 # Create Math static library target
-add_library(Math)
+add_library(KairoMath)
 
 # Configure the C++ Modules File Set
-target_sources(Math
+target_sources(KairoMath
     PUBLIC
         FILE_SET CXX_MODULES
         BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}
@@ -25,6 +25,12 @@ target_sources(Math
             Matrix.cppm
             Quaternion.cppm
             Transform.cppm
+            DynamicMatrix.cppm
+            LinearSolve.cppm
+            Decomposition.cppm
+            Eigen.cppm
+            SVD.cppm
+            Statistics.cppm
 )
 
 # Catch2 Unit Test Integration
@@ -38,8 +44,9 @@ FetchContent_MakeAvailable(Catch2)
 
 # MathTests executable
 add_executable(MathTests tests/MathTests.cpp)
-target_link_libraries(MathTests PRIVATE Math Catch2::Catch2WithMain)
+target_link_libraries(MathTests PRIVATE KairoMath Catch2::Catch2WithMain)
 
 # MathVisualizer executable
 add_executable(MathVisualizer tests/VisualTests.cpp)
-target_link_libraries(MathVisualizer PRIVATE Math)
+target_link_libraries(MathVisualizer PRIVATE KairoMath)
+

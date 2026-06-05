@@ -1,8 +1,8 @@
 # KairoMath
 
-A high-performance, production-grade 3D math library written in modern C++23. Built entirely on **C++20/C++23 Modules** for lightning-fast compilation, strict encapsulation, and clean symbol isolation.
+A high-performance, production-grade 3D math and linear algebra library written in modern C++23. Built entirely on **C++20/C++23 Modules** for lightning-fast compilation, strict encapsulation, and clean symbol isolation.
 
-`KairoMath` is designed to support high-performance game engines, CPU ray tracers, physics solvers, and spatial indexing structures. It follows strict mathematical safety rules, avoids runtime allocations, and maintains complete layout compatibility with GPU graphics APIs (Vulkan, Metal, and OpenGL).
+`KairoMath` is designed to support high-performance game engines, CPU ray tracers, physics solvers, spatial indexing structures, and data science/robotics applications. It follows strict mathematical safety rules, avoids unnecessary runtime allocations, and maintains complete layout compatibility with GPU graphics APIs.
 
 ---
 
@@ -13,30 +13,48 @@ Most C++ math libraries (like GLM) are header-only and rely on massive, legacy p
 *   **Lightning Compile Times**: Module interfaces are compiled once into binary module interfaces (`.pcm`), bypassing the need to re-parse headers across translation units.
 *   **TRS Transform Paradigm**: Separation of Translation, Rotation (Quaternion), and Scale instead of using generic 4x4 matrices. This prevents floating-point drift, simplifies animation blending/interpolation (via SLerp), and provides clean editor ergonomics.
 *   **API Agnostic & Vulkan Ready**: Follows standard **row-major memory storage** (for direct pointer uploads via `.Data()`), **column-vector multiplication** ($v' = M \cdot v$), and **Vulkan-style projection conventions** (Z depth mapped to `[0, 1]`).
-*   **No Runtime Allocations**: All objects are trivially copyable, allocation-free, stack-allocated structs designed for cash-friendly cache line access.
+*   **Linear Algebra Suite**: Built-in support for dynamically sized matrices, linear system solvers, matrix decompositions, eigenvalue solvers, SVD, PCA, and regression.
+*   **No Runtime Allocations for Core Geometry**: Geometry types (Vec/Mat/Quat) are trivially copyable, allocation-free, stack-allocated structs designed for cash-friendly cache line access.
 
 ---
 
 ## Library Architecture
 
-The library is organized in a single linear dependency chain:
+The library is organized in a clean hierarchical dependency chain of module partitions:
 
+### 1. Geometry & Spatial Primitives
 ```text
 Vector (Vec2, Vec3, Vec4)
-  └── Matrix (Mat3, Mat4)
+  └── Matrix (Mat2, Mat3, Mat4)
         └── Quaternion (Quat)
               └── Transform (TRS)
 ```
+*   **Import Interfaces**:
+    ```cpp
+    import Kairo.Foundation.Math.Vector;
+    import Kairo.Foundation.Math.Matrix;
+    import Kairo.Foundation.Math.Quaternion;
+    import Kairo.Foundation.Math.Transform;
+    ```
 
-### Module and Namespace Structure
-To use the library in your code, import the module partitions under the `Kairo` package:
-
-```cpp
-import Kairo.Foundation.Math.Vector;
-import Kairo.Foundation.Math.Matrix;
-import Kairo.Foundation.Math.Quaternion;
-import Kairo.Foundation.Math.Transform;
+### 2. Linear Algebra & Numerical Suite
+```text
+DynamicMatrix (arbitrary dimensions)
+  ├── LinearSolve (Forward/Backward Substitution, Gauss-Jordan, REF/RREF)
+  ├── Decomposition (LU, LUP, QR, Cholesky, LDLT)
+  ├── Eigen (Power Iteration, QR Eigenvalues)
+  ├── SVD (Singular Value Decomposition)
+  └── Statistics (Covariance, PCA, Linear Regression)
 ```
+*   **Import Interfaces**:
+    ```cpp
+    import Kairo.Foundation.Math.DynamicMatrix;
+    import Kairo.Foundation.Math.LinearAlgebra.LinearSolve;
+    import Kairo.Foundation.Math.LinearAlgebra.Decomposition;
+    import Kairo.Foundation.Math.LinearAlgebra.Eigen;
+    import Kairo.Foundation.Math.LinearAlgebra.SVD;
+    import Kairo.Foundation.Math.LinearAlgebra.Statistics;
+    ```
 
 All types, constants, and math functions live inside the C++ namespace:
 ```cpp
@@ -45,57 +63,31 @@ kairo::foundation::math
 
 ---
 
-## Core Mathematical Operations & Correctness Fixes
+## Core Features & Stabilization Fixes
 
 `KairoMath` resolves several common mathematical pitfalls present in standard game engine math libraries:
 
 ### 1. Snell's Law & Total Internal Reflection (TIR)
-In rendering and ray tracing, `Refract()` is used to compute light propagation through media interfaces. The standard Snell formula contains a square root:
-$$\cos\theta_2 = \sqrt{1 - \eta^2(1 - \cos^2\theta_1)}$$
+In rendering and ray tracing, `Refract()` is used to compute light propagation through media interfaces.
+If the light travels from a denser to a rarer medium (e.g., glass to air) at a steep angle, standard math libraries will evaluate `sqrt(negative)` resulting in `NaN` outputs, which propagates through the scene graph and causes black pixels in renderers.
 
-If the light travels from a denser to a rarer medium (e.g., glass to air) at a steep angle, the term inside the square root becomes negative. Standard math libraries will evaluate `sqrt(negative)` resulting in `NaN` outputs, which propagates through the scene graph and causes black pixels in renderers.
-
-**Solution**: `KairoMath` guards this condition. If total internal reflection occurs, it immediately handles it by returning a zero-vector sentinel, allowing the caller to cleanly fallback to reflection:
-```cpp
-const T parallelLengthSquared = T(1) - perpendicular.LengthSquared();
-if (parallelLengthSquared < T(0))
-{
-    return VectorN<T>::Zero(); // Total Internal Reflection guard
-}
-```
+**Solution**: `KairoMath` guards this condition. If total internal reflection occurs, it immediately handles it by returning a zero-vector sentinel, allowing the caller to cleanly fallback to reflection.
 
 ### 2. Arbitrary Axis Projection
-Vector projection decomposes motion or forces along an axis. The simplified formula:
-$$\text{Project}(u, v) = v \cdot (u \cdot v)$$
-is only valid if $v$ is a normalized unit vector.
+Vector projection decomposes motion or forces along an axis. The simplified formula is only valid if the axis is a normalized unit vector.
 
-**Solution**: `KairoMath` implements the generalized projection formula, making it safe for arbitrary non-unit axes, while guarding against divisions by zero (if the axis is zero-length):
-```cpp
-const T denominator = Dot(onto, onto);
-if (denominator <= std::numeric_limits<T>::epsilon())
-{
-    return VectorN<T>::Zero(); // Safe fallback for zero-length axis
-}
-return onto * (Dot(vector, onto) / denominator);
-```
+**Solution**: `KairoMath` implements the generalized projection formula, making it safe for arbitrary non-unit axes, while guarding against divisions by zero (if the axis is zero-length).
 
 ### 3. Rotated Non-Uniform Scale Inversion
-A common bug in scene graphs is attempting to invert a `Transform` with non-uniform scale (e.g., $S = [1, 2, 1]$) that has been rotated. 
-
-Mathematically, the inverse of a rotated non-uniform scale transform introduces **shear**. Because a TRS (Translation, Rotation, Scale) struct has no shear components, the inverse of a rotated non-uniform scale transform **cannot** be represented as another TRS transform. Calling `Inverse()` on a TRS transform with non-uniform scale asserts or produces invalid results.
+The inverse of a rotated non-uniform scale transform introduces **shear**. Because a TRS struct has no shear components, the inverse of a rotated non-uniform scale transform **cannot** be represented as another TRS transform.
 
 **Solution**:
 *   `Inverse(Transform)` restricts itself to uniform scales (asserting in debug builds when non-uniform scales are detected).
-*   For exact point conversions, use `WorldToLocal()`, which handles non-uniform rotated scales exactly by resolving scale divisions on the rotated components:
-    ```cpp
-    const Vector3<T> translated = point - transform.Translation;
-    const Vector3<T> rotated = Rotate(Inverse(transform.Rotation), translated);
-    return { rotated.x / transform.Scale.x, rotated.y / transform.Scale.y, ... };
-    ```
-*   Alternatively, you can convert the transform to a matrix `ToMatrix4(transform)` and compute `Inverse(Matrix4)`, which handles shear exactly in homogeneous coordinates.
+*   For exact point conversions, use `WorldToLocal()`, which handles non-uniform rotated scales exactly by resolving scale divisions on the rotated components.
+*   Alternatively, convert the transform to a matrix `ToMatrix4(transform)` and compute `Inverse(Matrix4)`.
 
-### 4. Gauss-Jordan Elimination with Partial Pivoting
-For `Inverse(Matrix4)`, `KairoMath` uses Gauss-Jordan elimination with partial pivoting. This approach is highly robust against singular/near-singular matrices (like degenerate camera matrices) and provides numerical stability by finding the largest pivot element in each column to prevent division by near-zero values.
+### 4. Robust Gauss-Jordan Elimination with Partial Pivoting
+For `Inverse(Matrix4)` and general linear solver functions, `KairoMath` uses Gauss-Jordan elimination with partial pivoting. This approach is highly robust against singular/near-singular matrices and provides numerical stability by finding the largest pivot element in each column to prevent division by near-zero values.
 
 ---
 
@@ -122,29 +114,54 @@ brew install llvm ninja cmake
     ```bash
     ./build/MathTests
     ```
-4.  **Run the Visualizer**:
+4.  **Run the Visualizer & Generate HTML Report**:
     ```bash
     ./build/MathVisualizer
     ```
 
 ---
 
-## Verifying Visual Operations
+## Interactive Visual Lab & API Server
 
-`KairoMath` comes with an interactive visual test suite that lets you visualize math operations directly.
+`KairoMath` includes a premium, interactive web dashboard (`visual_tests.html`) and local server gateway (`server.py`) to visualize all functionalities using the compiled C++ library.
 
-### 1. Terminal 3D Render
-Running `./build/MathVisualizer` displays a real-time, 60-frame interactive 3D rotating wireframe cube directly inside your terminal, calculated using `KairoMath`'s `Transform`, `Quaternion`, and `Perspective` projection matrices.
+### Architecture
 
-### 2. Browser Interactive Playground
-Running the visualizer also generates an HTML file `visual_tests.html` in your directory. Open it on your Macbook:
-```bash
-open visual_tests.html
+```text
+  [ Front-End Dashboard ] (Browser)
+            │  (REST API / JSON)
+            ▼
+   [ Python API Server ] (server.py)
+            │  (std::cin / std::cout)
+            ▼
+    [ C++ Math Engine ] (MathVisualizer --api)
 ```
-This launches a beautiful, modern, dark-mode dashboard where you can interactively adjust:
-*   **Vector Projection**: Drag target vectors and axes to observe projection behavior on non-unit and zero-length boundaries.
-*   **Reflection & Refraction**: Tweak refractive indices to see Snell's law in action and watch the refracted ray disappear during **Total Internal Reflection**.
-*   **3D Transform Workspace**: Modify Translation, Rotation, and Scale sliders to inspect the resulting homogeneous $4\times 4$ TRS matrix composition in real-time.
+
+1.  **C++ API mode**: The `MathVisualizer` binary accepts `--api` which reads mathematical tasks from `stdin` (in simple text protocol format), performs calculations, and prints a single-line JSON result to `stdout`.
+2.  **Python API Gateway**: `server.py` listens on `http://localhost:8080`. It serves `visual_tests.html` statically and routes `/api/<endpoint>` requests directly to a spawned C++ `MathVisualizer --api` subprocess.
+3.  **Web Dashboard**: Built using modern Outfit typography, smooth animations, and glassmorphism. It automatically detects if the Python/C++ server is connected (green live indicator) or offline (falling back to local JS mock/approximations).
+
+### Running the Live Visual Lab
+
+1.  **Ensure the C++ Visualizer is compiled**:
+    ```bash
+    cmake --build build
+    ```
+2.  **Start the Python gateway server**:
+    ```bash
+    python3 server.py
+    ```
+3.  **Access the Dashboard**:
+    Open [http://localhost:8080/visual_tests.html](http://localhost:8080/visual_tests.html) in your browser.
+
+### Laboratories Included
+
+*   **Vector Operations Lab**: Interactive projection, reflection, and refraction. Tweak refractive indices to see Snell's law in action and watch the refracted ray disappear during **Total Internal Reflection**.
+*   **Linear Solver Lab**: Solve systems of equations $A x = b$ for dimensions up to $4\times 4$. Dynamically modify the input cells and instantly view the calculated solution vector along with its row-echelon forms (REF & RREF).
+*   **Matrix Decomposition Lab**: Computes LU, LUP (with permutation vectors), QR, Cholesky, and LDLT factorizations.
+*   **Eigen & SVD Lab**: Computes eigenvalues, eigenvectors, and Singular Value Decompositions ($U \Sigma V^T$) of custom matrices.
+*   **PCA & Regression Lab**: Click on the canvas grid to add 2D data points. The C++ Statistics engine dynamically recalculates and draws the linear regression line (in pink) and principal component variance axes (in green/yellow) in real-time.
+*   **3D Transform Cube**: Adjust translation, scale, pitch, and yaw rotation sliders to rotate a 3D wireframe cube, rendering the composed TRS $4\times 4$ transformation matrix calculated by the C++ engine.
 
 ---
 
@@ -201,13 +218,26 @@ Vec3f worldPoint = TransformPoint(combined, localPoint);
 Vec3f restoredPoint = WorldToLocal(combined, worldPoint);
 ```
 
----
+### 4. Solving Linear Systems and Decompositions
+```cpp
+import Kairo.Foundation.Math.DynamicMatrix;
+import Kairo.Foundation.Math.LinearAlgebra.LinearSolve;
+import Kairo.Foundation.Math.LinearAlgebra.Decomposition;
 
-## Future Roadmap
+using namespace kairo::foundation::math;
 
-The strategic direction of KairoMath is to remain focused on geometry primitives next before adding camera/frustum/physics wrappers:
+// Create a 3x3 matrix and vector b
+DynamicMatrix<double> A(3, 3);
+A(0,0)=2.0; A(0,1)=1.0; A(0,2)=1.0;
+A(1,0)=1.0; A(1,1)=3.0; A(1,2)=1.0;
+A(2,0)=1.0; A(2,1)=1.0; A(2,2)=4.0;
+[Matrix.cppm](Matrix.cppm)
+std::vector<double> b = {2.0, 3.0, 4.0};
 
-*   [ ] Add `Ray.cppm`, `Plane.cppm`, and `AABB.cppm` targets.
-*   [ ] Implement BVH (Bounding Volume Hierarchy) construction.
-*   [ ] Implement a CPU Ray Tracer to stress-test vector/matrix operations.
-*   [ ] Add relative-tolerance comparisons for very large values.
+// Solve system A x = b
+std::vector<double> x = LinearSolve(A, b);
+
+// Compute LUP Factorization
+LUPResult<double> res = LUP(A);
+// res.L, res.U, and res.P represent the components
+```

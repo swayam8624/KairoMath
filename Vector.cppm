@@ -320,7 +320,10 @@ export namespace kairo::foundation::math
         T LengthInverse() const noexcept
             requires FloatingPoint<T>
         {
-            return T(1) / Length();
+            const T length = Length();
+            return length <= std::numeric_limits<T>::epsilon()
+                ? T(0)
+                : T(1) / length;
         }
 
         /// Input: this floating-point vector.
@@ -465,6 +468,10 @@ export namespace kairo::foundation::math
         T y;
         T z;
 
+        //-----------------------------------------------------
+        // Constructors
+        //-----------------------------------------------------
+
         /// Input: none.
         /// Output: zero-initialized vector.
         /// Task: deterministic default construction.
@@ -505,6 +512,11 @@ export namespace kairo::foundation::math
         {
         }
 
+        //-----------------------------------------------------
+        // Element Access
+        //-----------------------------------------------------
+
+
         /// Input: index in [0, Size). Output: mutable component reference.
         /// Task: array-style access for generic math code.
         [[nodiscard]]
@@ -539,6 +551,11 @@ export namespace kairo::foundation::math
         {
             return &x;
         }
+
+        //-----------------------------------------------------
+        // Operations
+        //-----------------------------------------------------
+
 
         /// Input: this vector. Output: unchanged copy. Task: expression symmetry.
         [[nodiscard]]
@@ -613,6 +630,11 @@ export namespace kairo::foundation::math
             return *this;
         }
 
+        //-----------------------------------------------------
+        // Comparisons
+        //-----------------------------------------------------
+
+
         /// Input: another vector. Output: exact component equality.
         /// Task: deterministic exact comparison; use NearlyEqual() for floats.
         [[nodiscard]]
@@ -642,7 +664,10 @@ export namespace kairo::foundation::math
         T LengthInverse() const noexcept
             requires FloatingPoint<T>
         {
-            return T(1) / Length();
+            const T length = Length();
+            return length <= std::numeric_limits<T>::epsilon()
+                ? T(0)
+                : T(1) / length;
         }
 
         /// Input: this floating-point vector.
@@ -757,6 +782,10 @@ export namespace kairo::foundation::math
         T z;
         T w;
 
+        //-----------------------------------------------------
+        // Constructors
+        //-----------------------------------------------------
+
         /// Input: none. Output: zero-initialized vector.
         /// Task: deterministic default construction.
         constexpr Vector4() noexcept
@@ -799,6 +828,11 @@ export namespace kairo::foundation::math
         {
         }
 
+        //-----------------------------------------------------
+        // Element Access
+        //-----------------------------------------------------
+
+
         /// Input: index in [0, Size). Output: mutable component reference.
         /// Task: array-style generic access.
         [[nodiscard]]
@@ -831,6 +865,11 @@ export namespace kairo::foundation::math
         {
             return &x;
         }
+
+        //-----------------------------------------------------
+        // Operations
+        //-----------------------------------------------------
+
 
         /// Input: this vector. Output: unchanged copy. Task: expression symmetry.
         [[nodiscard]]
@@ -940,7 +979,10 @@ export namespace kairo::foundation::math
         T LengthInverse() const noexcept
             requires FloatingPoint<T>
         {
-            return T(1) / Length();
+            const T length = Length();
+            return length <= std::numeric_limits<T>::epsilon()
+                ? T(0)
+                : T(1) / length;
         }
 
         /// Input: this floating-point vector.
@@ -1200,6 +1242,21 @@ export namespace kairo::foundation::math
 
     /// Input: normal, incident direction, and reference direction.
     /// Output: normal or -normal so it faces against the incident/reference side.
+    /// Task: orient normals consistently for coordinate frames.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    constexpr Vector2<T> FaceForward(
+        const Vector2<T>& normal,
+        const Vector2<T>& incident,
+        const Vector2<T>& reference) noexcept
+    {
+        return Dot(reference, incident) < T(0)
+            ? normal
+            : -normal;
+    }
+
+    /// Input: normal, incident direction, and reference direction.
+    /// Output: normal or -normal so it faces against the incident/reference side.
     /// Task: orient normals consistently for PBR, ray tracing, normal mapping,
     /// and shading coordinate frames.
     template<FloatingPoint T>
@@ -1212,6 +1269,31 @@ export namespace kairo::foundation::math
         return Dot(reference, incident) < T(0)
             ? normal
             : -normal;
+    }
+
+    /// Input: normal, incident direction, and reference direction.
+    /// Output: normal or -normal so it faces against the incident/reference side.
+    /// Task: orient normals consistently for coordinate frames.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    constexpr Vector4<T> FaceForward(
+        const Vector4<T>& normal,
+        const Vector4<T>& incident,
+        const Vector4<T>& reference) noexcept
+    {
+        return Dot(reference, incident) < T(0)
+            ? normal
+            : -normal;
+    }
+
+    /// Input: a 2D vector.
+    /// Output: a non-normalized vector perpendicular to the input.
+    /// Task: produce a perpendicular vector.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    constexpr Vector2<T> Orthogonal(const Vector2<T>& vector) noexcept
+    {
+        return { -vector.y, vector.x };
     }
 
     /// Input: a 3D vector.
@@ -1228,6 +1310,21 @@ export namespace kairo::foundation::math
         }
 
         return { T(0), -vector.z, vector.y };
+    }
+
+    /// Input: a 4D vector.
+    /// Output: a non-normalized vector perpendicular to the input.
+    /// Task: produce a perpendicular vector.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    Vector4<T> Orthogonal(const Vector4<T>& vector) noexcept
+    {
+        if (std::abs(vector.x) > std::abs(vector.w))
+        {
+            return { -vector.y, vector.x, T(0), T(0) };
+        }
+
+        return { T(0), T(0), -vector.w, vector.z };
     }
 
     //=========================================================
@@ -1790,6 +1887,37 @@ export namespace kairo::foundation::math
 
         return onto * (Dot(vector, onto) / denominator);
     }
+
+    /// Input: vector and axis to reject from.
+    /// Output: component of vector perpendicular to onto.
+    /// Task: subtract the projected component from the original vector.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    constexpr Vector2<T> Reject(const Vector2<T>& vector, const Vector2<T>& onto) noexcept
+    {
+        return vector - Project(vector, onto);
+    }
+
+    /// Input: vector and axis to reject from.
+    /// Output: component of vector perpendicular to onto.
+    /// Task: subtract the projected component from the original vector.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    constexpr Vector3<T> Reject(const Vector3<T>& vector, const Vector3<T>& onto) noexcept
+    {
+        return vector - Project(vector, onto);
+    }
+
+    /// Input: vector and axis to reject from.
+    /// Output: component of vector perpendicular to onto.
+    /// Task: subtract the projected component from the original vector.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    constexpr Vector4<T> Reject(const Vector4<T>& vector, const Vector4<T>& onto) noexcept
+    {
+        return vector - Project(vector, onto);
+    }
+
 
     /// Input: two points. Output: squared distance between them.
     /// Task: compare distances without sqrt.

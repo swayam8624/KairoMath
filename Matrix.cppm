@@ -28,10 +28,181 @@ export namespace kairo::foundation::math
     //=========================================================
 
     template<Arithmetic T>
+    struct Matrix2;
+
+    template<Arithmetic T>
     struct Matrix3;
 
     template<Arithmetic T>
     struct Matrix4;
+
+    //=========================================================
+    // Matrix2
+    //=========================================================
+
+    /// A 2x2 row-major matrix.
+    template<Arithmetic T>
+    struct Matrix2 final
+    {
+        using ValueType = T;
+
+        static constexpr std::size_t Rows = 2;
+        static constexpr std::size_t Columns = 2;
+        static constexpr std::size_t ElementCount = Rows * Columns;
+
+        std::array<T, ElementCount> data {};
+
+        /// Input: none.
+        /// Output: all-zero matrix.
+        [[nodiscard]]
+        static constexpr Matrix2 Zero() noexcept
+        {
+            return {};
+        }
+
+        /// Input: none.
+        /// Output: all-one matrix.
+        [[nodiscard]]
+        static constexpr Matrix2 One() noexcept
+        {
+            Matrix2 result;
+            for (auto& element : result.data)
+            {
+                element = T(1);
+            }
+            return result;
+        }
+
+        /// Input: none.
+        /// Output: identity matrix.
+        [[nodiscard]]
+        static constexpr Matrix2 Identity() noexcept
+        {
+            Matrix2 result;
+            result(0, 0) = T(1);
+            result(1, 1) = T(1);
+            return result;
+        }
+
+        /// Input: none.
+        /// Output: zero-initialized matrix.
+        constexpr Matrix2() noexcept = default;
+
+        /// Input: diagonal scalar.
+        /// Output: matrix with diagonal set to scalar and other elements zero.
+        constexpr explicit Matrix2(T diagonal) noexcept
+        {
+            (*this)(0, 0) = diagonal;
+            (*this)(1, 1) = diagonal;
+        }
+
+        /// Input: four row-major values.
+        /// Output: matrix containing those values.
+        constexpr Matrix2(
+            T m00, T m01,
+            T m10, T m11) noexcept
+            : data
+            {
+                m00, m01,
+                m10, m11
+            }
+        {
+        }
+
+        /// Input: row and column in valid ranges.
+        /// Output: mutable element reference.
+        [[nodiscard]]
+        constexpr T& operator()(std::size_t row, std::size_t column) noexcept
+        {
+            assert(row < Rows);
+            assert(column < Columns);
+            return data[(row * Columns) + column];
+        }
+
+        /// Input: row and column in valid ranges.
+        /// Output: const element reference.
+        [[nodiscard]]
+        constexpr const T& operator()(std::size_t row, std::size_t column) const noexcept
+        {
+            assert(row < Rows);
+            assert(column < Columns);
+            return data[(row * Columns) + column];
+        }
+
+        /// Input: linear index in [0, ElementCount).
+        /// Output: mutable element reference.
+        [[nodiscard]]
+        constexpr T& operator[](std::size_t index) noexcept
+        {
+            assert(index < ElementCount);
+            return data[index];
+        }
+
+        /// Input: linear index in [0, ElementCount).
+        /// Output: const element reference.
+        [[nodiscard]]
+        constexpr const T& operator[](std::size_t index) const noexcept
+        {
+            assert(index < ElementCount);
+            return data[index];
+        }
+
+        /// Input: none.
+        /// Output: pointer to the first row-major element.
+        [[nodiscard]]
+        constexpr T* Data() noexcept
+        {
+            return data.data();
+        }
+
+        /// Input: none.
+        /// Output: const pointer to the first row-major element.
+        [[nodiscard]]
+        constexpr const T* Data() const noexcept
+        {
+            return data.data();
+        }
+
+        /// Input: row index.
+        /// Output: selected row as a Vector2.
+        [[nodiscard]]
+        constexpr Vector2<T> Row(std::size_t row) const noexcept
+        {
+            assert(row < Rows);
+            return { (*this)(row, 0), (*this)(row, 1) };
+        }
+
+        /// Input: column index.
+        /// Output: selected column as a Vector2.
+        [[nodiscard]]
+        constexpr Vector2<T> Column(std::size_t column) const noexcept
+        {
+            assert(column < Columns);
+            return { (*this)(0, column), (*this)(1, column) };
+        }
+
+        /// Input: row index and replacement row.
+        constexpr void SetRow(std::size_t row, const Vector2<T>& value) noexcept
+        {
+            assert(row < Rows);
+            (*this)(row, 0) = value.x;
+            (*this)(row, 1) = value.y;
+        }
+
+        /// Input: column index and replacement column.
+        constexpr void SetColumn(std::size_t column, const Vector2<T>& value) noexcept
+        {
+            assert(column < Columns);
+            (*this)(0, column) = value.x;
+            (*this)(1, column) = value.y;
+        }
+
+        /// Input: another matrix.
+        /// Output: exact element-wise equality.
+        [[nodiscard]]
+        constexpr bool operator==(const Matrix2&) const noexcept = default;
+    };
+
 
     //=========================================================
     // Matrix3
@@ -438,6 +609,62 @@ export namespace kairo::foundation::math
     //=========================================================
 
     /// Input: two matrices. Output: lhs after element-wise addition.
+    template<Arithmetic T>
+    constexpr Matrix2<T>& operator+=(Matrix2<T>& lhs, const Matrix2<T>& rhs) noexcept
+    {
+        for (std::size_t i = 0; i < Matrix2<T>::ElementCount; ++i)
+        {
+            lhs[i] += rhs[i];
+        }
+        return lhs;
+    }
+
+    /// Input: two matrices. Output: lhs after element-wise subtraction.
+    template<Arithmetic T>
+    constexpr Matrix2<T>& operator-=(Matrix2<T>& lhs, const Matrix2<T>& rhs) noexcept
+    {
+        for (std::size_t i = 0; i < Matrix2<T>::ElementCount; ++i)
+        {
+            lhs[i] -= rhs[i];
+        }
+        return lhs;
+    }
+
+    /// Input: matrix and scalar. Output: matrix after uniform scaling.
+    template<Arithmetic T>
+    constexpr Matrix2<T>& operator*=(Matrix2<T>& matrix, T scalar) noexcept
+    {
+        for (auto& element : matrix.data)
+        {
+            element *= scalar;
+        }
+        return matrix;
+    }
+
+    /// Input: matrix and non-zero scalar. Output: matrix after uniform division.
+    template<Arithmetic T>
+    constexpr Matrix2<T>& operator/=(Matrix2<T>& matrix, T scalar) noexcept
+    {
+        assert(scalar != T(0));
+        if constexpr (FloatingPoint<T>)
+        {
+            const T inverseScalar = T(1) / scalar;
+            for (auto& element : matrix.data)
+            {
+                element *= inverseScalar;
+            }
+        }
+        else
+        {
+            for (auto& element : matrix.data)
+            {
+                element /= scalar;
+            }
+        }
+        return matrix;
+    }
+
+    /// Input: two matrices. Output: lhs after element-wise addition.
     /// Task: in-place addition without allocating temporaries.
     template<Arithmetic T>
     constexpr Matrix3<T>& operator+=(Matrix3<T>& lhs, const Matrix3<T>& rhs) noexcept
@@ -561,6 +788,46 @@ export namespace kairo::foundation::math
     // Binary Operators
     //=========================================================
 
+    /// Input: two matrices. Output: element-wise sum.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Matrix2<T> operator+(Matrix2<T> lhs, const Matrix2<T>& rhs) noexcept
+    {
+        return lhs += rhs;
+    }
+
+    /// Input: two matrices. Output: element-wise difference.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Matrix2<T> operator-(Matrix2<T> lhs, const Matrix2<T>& rhs) noexcept
+    {
+        return lhs -= rhs;
+    }
+
+    /// Input: matrix and scalar. Output: scaled matrix.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Matrix2<T> operator*(Matrix2<T> lhs, T scalar) noexcept
+    {
+        return lhs *= scalar;
+    }
+
+    /// Input: scalar and matrix. Output: scaled matrix.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Matrix2<T> operator*(T scalar, Matrix2<T> rhs) noexcept
+    {
+        return rhs *= scalar;
+    }
+
+    /// Input: matrix and non-zero scalar. Output: divided matrix.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Matrix2<T> operator/(Matrix2<T> lhs, T scalar) noexcept
+    {
+        return lhs /= scalar;
+    }
+
     /// Input: two matrices. Output: element-wise sum. Task: value addition.
     template<Arithmetic T>
     [[nodiscard]]
@@ -646,6 +913,43 @@ export namespace kairo::foundation::math
     //=========================================================
     // Matrix Multiplication
     //=========================================================
+
+    /// Input: two 2x2 matrices.
+    /// Output: matrix product lhs * rhs.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Matrix2<T> operator*(const Matrix2<T>& lhs, const Matrix2<T>& rhs) noexcept
+    {
+        Matrix2<T> result;
+
+        for (std::size_t row = 0; row < Matrix2<T>::Rows; ++row)
+        {
+            for (std::size_t column = 0; column < Matrix2<T>::Columns; ++column)
+            {
+                T sum = T(0);
+                for (std::size_t k = 0; k < Matrix2<T>::Columns; ++k)
+                {
+                    sum += lhs(row, k) * rhs(k, column);
+                }
+                result(row, column) = sum;
+            }
+        }
+
+        return result;
+    }
+
+    /// Input: 2x2 matrix and 2D vector.
+    /// Output: transformed vector.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Vector2<T> operator*(const Matrix2<T>& matrix, const Vector2<T>& vector) noexcept
+    {
+        return
+        {
+            Dot(matrix.Row(0), vector),
+            Dot(matrix.Row(1), vector)
+        };
+    }
 
     /// Input: two 3x3 matrices.
     /// Output: matrix product lhs * rhs.
@@ -736,6 +1040,55 @@ export namespace kairo::foundation::math
 
     /// Input: matrix.
     /// Output: transpose where rows and columns are swapped.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Matrix2<T> Transpose(const Matrix2<T>& matrix) noexcept
+    {
+        return
+        {
+            matrix(0, 0), matrix(1, 0),
+            matrix(0, 1), matrix(1, 1)
+        };
+    }
+
+    /// Input: matrix.
+    /// Output: sum of diagonal elements.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr T Trace(const Matrix2<T>& matrix) noexcept
+    {
+        return matrix(0, 0) + matrix(1, 1);
+    }
+
+    /// Input: matrix.
+    /// Output: diagonal elements as a vector.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Vector2<T> Diagonal(const Matrix2<T>& matrix) noexcept
+    {
+        return { matrix(0, 0), matrix(1, 1) };
+    }
+
+    /// Input: matrix.
+    /// Output: diagonal elements as a vector.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Vector3<T> Diagonal(const Matrix3<T>& matrix) noexcept
+    {
+        return { matrix(0, 0), matrix(1, 1), matrix(2, 2) };
+    }
+
+    /// Input: matrix.
+    /// Output: diagonal elements as a vector.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Vector4<T> Diagonal(const Matrix4<T>& matrix) noexcept
+    {
+        return { matrix(0, 0), matrix(1, 1), matrix(2, 2), matrix(3, 3) };
+    }
+
+    /// Input: matrix.
+    /// Output: transpose where rows and columns are swapped.
     /// Task: convert between row/column access and support inverse-transpose normal math.
     template<Arithmetic T>
     [[nodiscard]]
@@ -788,6 +1141,109 @@ export namespace kairo::foundation::math
     constexpr T Trace(const Matrix4<T>& matrix) noexcept
     {
         return matrix(0, 0) + matrix(1, 1) + matrix(2, 2) + matrix(3, 3);
+    }
+
+    /// Input: two matrices and absolute epsilon.
+    /// Output: true when every element is within epsilon.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    bool NearlyEqual(
+        const Matrix2<T>& lhs,
+        const Matrix2<T>& rhs,
+        T epsilon = std::numeric_limits<T>::epsilon() * T(10)) noexcept
+    {
+        for (std::size_t i = 0; i < Matrix2<T>::ElementCount; ++i)
+        {
+            if (!NearlyEqual(lhs[i], rhs[i], epsilon))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// Input: matrix and absolute epsilon.
+    /// Output: true when matrix is nearly identity.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    bool IsIdentity(
+        const Matrix2<T>& matrix,
+        T epsilon = std::numeric_limits<T>::epsilon() * T(10)) noexcept
+    {
+        return NearlyEqual(matrix, Matrix2<T>::Identity(), epsilon);
+    }
+
+    /// Input: matrix and absolute epsilon.
+    /// Output: true when matrix is nearly symmetric.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    bool IsSymmetric(
+        const Matrix2<T>& matrix,
+        T epsilon = std::numeric_limits<T>::epsilon() * T(10)) noexcept
+    {
+        return NearlyEqual(matrix(0, 1), matrix(1, 0), epsilon);
+    }
+
+    /// Input: matrix and absolute epsilon.
+    /// Output: true when matrix is nearly symmetric.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    bool IsSymmetric(
+        const Matrix3<T>& matrix,
+        T epsilon = std::numeric_limits<T>::epsilon() * T(10)) noexcept
+    {
+        return NearlyEqual(matrix(0, 1), matrix(1, 0), epsilon) &&
+               NearlyEqual(matrix(0, 2), matrix(2, 0), epsilon) &&
+               NearlyEqual(matrix(1, 2), matrix(2, 1), epsilon);
+    }
+
+    /// Input: matrix and absolute epsilon.
+    /// Output: true when matrix is nearly symmetric.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    bool IsSymmetric(
+        const Matrix4<T>& matrix,
+        T epsilon = std::numeric_limits<T>::epsilon() * T(10)) noexcept
+    {
+        return NearlyEqual(matrix(0, 1), matrix(1, 0), epsilon) &&
+               NearlyEqual(matrix(0, 2), matrix(2, 0), epsilon) &&
+               NearlyEqual(matrix(0, 3), matrix(3, 0), epsilon) &&
+               NearlyEqual(matrix(1, 2), matrix(2, 1), epsilon) &&
+               NearlyEqual(matrix(1, 3), matrix(3, 1), epsilon) &&
+               NearlyEqual(matrix(2, 3), matrix(3, 2), epsilon);
+    }
+
+    /// Input: matrix and absolute epsilon.
+    /// Output: true when matrix is nearly orthogonal.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    bool IsOrthogonal(
+        const Matrix2<T>& matrix,
+        T epsilon = std::numeric_limits<T>::epsilon() * T(10)) noexcept
+    {
+        return IsIdentity(Transpose(matrix) * matrix, epsilon);
+    }
+
+    /// Input: matrix and absolute epsilon.
+    /// Output: true when matrix is nearly orthogonal.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    bool IsOrthogonal(
+        const Matrix3<T>& matrix,
+        T epsilon = std::numeric_limits<T>::epsilon() * T(10)) noexcept
+    {
+        return IsIdentity(Transpose(matrix) * matrix, epsilon);
+    }
+
+    /// Input: matrix and absolute epsilon.
+    /// Output: true when matrix is nearly orthogonal.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    bool IsOrthogonal(
+        const Matrix4<T>& matrix,
+        T epsilon = std::numeric_limits<T>::epsilon() * T(10)) noexcept
+    {
+        return IsIdentity(Transpose(matrix) * matrix, epsilon);
     }
 
     /// Input: two matrices and absolute epsilon.
@@ -858,6 +1314,60 @@ export namespace kairo::foundation::math
     // Determinants and Inverses
     //=========================================================
 
+    template<typename T>
+    constexpr T ConstexprAbs(T val) noexcept
+    {
+        return val < T(0) ? -val : val;
+    }
+
+    /// Input: 2x2 matrix.
+    /// Output: determinant.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr T Determinant(const Matrix2<T>& matrix) noexcept
+    {
+        return matrix(0, 0) * matrix(1, 1) - matrix(0, 1) * matrix(1, 0);
+    }
+
+    /// Input: 2x2 matrix.
+    /// Output: cofactor matrix.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Matrix2<T> Cofactor(const Matrix2<T>& matrix) noexcept
+    {
+        return
+        {
+             matrix(1, 1), -matrix(1, 0),
+            -matrix(0, 1),  matrix(0, 0)
+        };
+    }
+
+    /// Input: 2x2 matrix.
+    /// Output: adjugate matrix.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Matrix2<T> Adjugate(const Matrix2<T>& matrix) noexcept
+    {
+        return Transpose(Cofactor(matrix));
+    }
+
+    /// Input: invertible 2x2 floating-point matrix.
+    /// Output: inverse matrix, or identity when singular.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    constexpr Matrix2<T> Inverse(const Matrix2<T>& matrix) noexcept
+    {
+        const T determinant = Determinant(matrix);
+        assert(ConstexprAbs(determinant) > std::numeric_limits<T>::epsilon());
+
+        if (ConstexprAbs(determinant) <= std::numeric_limits<T>::epsilon())
+        {
+            return Matrix2<T>::Identity();
+        }
+
+        return Adjugate(matrix) / determinant;
+    }
+
     /// Input: 3x3 matrix.
     /// Output: determinant.
     /// Task: measure invertibility, signed area/volume scale, and orientation.
@@ -886,12 +1396,10 @@ export namespace kairo::foundation::math
     }
 
     /// Input: 3x3 matrix.
-    /// Output: adjugate matrix.
-    /// Task: helper for inverse computation. The cofactor matrix is transposed
-    /// at the end to form the adjugate.
+    /// Output: cofactor matrix.
     template<Arithmetic T>
     [[nodiscard]]
-    constexpr Matrix3<T> Adjugate(const Matrix3<T>& matrix) noexcept
+    constexpr Matrix3<T> Cofactor(const Matrix3<T>& matrix) noexcept
     {
         Matrix3<T> cofactor;
 
@@ -907,7 +1415,58 @@ export namespace kairo::foundation::math
         cofactor(2, 1) = -(matrix(0, 0) * matrix(1, 2) - matrix(0, 2) * matrix(1, 0));
         cofactor(2, 2) = matrix(0, 0) * matrix(1, 1) - matrix(0, 1) * matrix(1, 0);
 
-        return Transpose(cofactor);
+        return cofactor;
+    }
+
+    /// Input: 3x3 matrix.
+    /// Output: adjugate matrix.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Matrix3<T> Adjugate(const Matrix3<T>& matrix) noexcept
+    {
+        return Transpose(Cofactor(matrix));
+    }
+
+    /// Input: two 2D vectors.
+    /// Output: 2x2 outer product matrix.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Matrix2<T> OuterProduct(const Vector2<T>& lhs, const Vector2<T>& rhs) noexcept
+    {
+        return
+        {
+            lhs.x * rhs.x, lhs.x * rhs.y,
+            lhs.y * rhs.x, lhs.y * rhs.y
+        };
+    }
+
+    /// Input: two 3D vectors.
+    /// Output: 3x3 outer product matrix.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Matrix3<T> OuterProduct(const Vector3<T>& lhs, const Vector3<T>& rhs) noexcept
+    {
+        return
+        {
+            lhs.x * rhs.x, lhs.x * rhs.y, lhs.x * rhs.z,
+            lhs.y * rhs.x, lhs.y * rhs.y, lhs.y * rhs.z,
+            lhs.z * rhs.x, lhs.z * rhs.y, lhs.z * rhs.z
+        };
+    }
+
+    /// Input: two 4D vectors.
+    /// Output: 4x4 outer product matrix.
+    template<Arithmetic T>
+    [[nodiscard]]
+    constexpr Matrix4<T> OuterProduct(const Vector4<T>& lhs, const Vector4<T>& rhs) noexcept
+    {
+        return
+        {
+            lhs.x * rhs.x, lhs.x * rhs.y, lhs.x * rhs.z, lhs.x * rhs.w,
+            lhs.y * rhs.x, lhs.y * rhs.y, lhs.y * rhs.z, lhs.y * rhs.w,
+            lhs.z * rhs.x, lhs.z * rhs.y, lhs.z * rhs.z, lhs.z * rhs.w,
+            lhs.w * rhs.x, lhs.w * rhs.y, lhs.w * rhs.z, lhs.w * rhs.w
+        };
     }
 
     /// Input: invertible 3x3 floating-point matrix.
@@ -917,12 +1476,12 @@ export namespace kairo::foundation::math
     /// problem loud in debug builds while preserving noexcept behavior.
     template<FloatingPoint T>
     [[nodiscard]]
-    Matrix3<T> Inverse(const Matrix3<T>& matrix) noexcept
+    constexpr Matrix3<T> Inverse(const Matrix3<T>& matrix) noexcept
     {
         const T determinant = Determinant(matrix);
-        assert(std::abs(determinant) > std::numeric_limits<T>::epsilon());
+        assert(ConstexprAbs(determinant) > std::numeric_limits<T>::epsilon());
 
-        if (std::abs(determinant) <= std::numeric_limits<T>::epsilon())
+        if (ConstexprAbs(determinant) <= std::numeric_limits<T>::epsilon())
         {
             return Matrix3<T>::Identity();
         }
@@ -935,7 +1494,7 @@ export namespace kairo::foundation::math
     /// Task: measure invertibility and volume scale for homogeneous transforms.
     template<Arithmetic T>
     [[nodiscard]]
-    T Determinant(const Matrix4<T>& matrix) noexcept
+    constexpr T Determinant(const Matrix4<T>& matrix) noexcept
     {
         const T a0 = matrix(0, 0) * matrix(1, 1) - matrix(1, 0) * matrix(0, 1);
         const T a1 = matrix(0, 0) * matrix(1, 2) - matrix(1, 0) * matrix(0, 2);
@@ -971,7 +1530,7 @@ export namespace kairo::foundation::math
     /// later with a SIMD-specialized affine inverse for hot transform paths.
     template<FloatingPoint T>
     [[nodiscard]]
-    Matrix4<T> Inverse(const Matrix4<T>& matrix) noexcept
+    constexpr Matrix4<T> Inverse(const Matrix4<T>& matrix) noexcept
     {
         Matrix4<T> working = matrix;
         Matrix4<T> inverse = Matrix4<T>::Identity();
@@ -979,11 +1538,11 @@ export namespace kairo::foundation::math
         for (std::size_t column = 0; column < Matrix4<T>::Columns; ++column)
         {
             std::size_t pivotRow = column;
-            T pivotMagnitude = std::abs(working(column, column));
+            T pivotMagnitude = ConstexprAbs(working(column, column));
 
             for (std::size_t row = column + 1; row < Matrix4<T>::Rows; ++row)
             {
-                const T candidateMagnitude = std::abs(working(row, column));
+                const T candidateMagnitude = ConstexprAbs(working(row, column));
                 if (candidateMagnitude > pivotMagnitude)
                 {
                     pivotMagnitude = candidateMagnitude;
@@ -1001,13 +1560,8 @@ export namespace kairo::foundation::math
             {
                 for (std::size_t currentColumn = 0; currentColumn < Matrix4<T>::Columns; ++currentColumn)
                 {
-                    const T workingTemp = working(column, currentColumn);
-                    working(column, currentColumn) = working(pivotRow, currentColumn);
-                    working(pivotRow, currentColumn) = workingTemp;
-
-                    const T inverseTemp = inverse(column, currentColumn);
-                    inverse(column, currentColumn) = inverse(pivotRow, currentColumn);
-                    inverse(pivotRow, currentColumn) = inverseTemp;
+                    std::swap(working(column, currentColumn), working(pivotRow, currentColumn));
+                    std::swap(inverse(column, currentColumn), inverse(pivotRow, currentColumn));
                 }
             }
 
@@ -1320,6 +1874,9 @@ export namespace kairo::foundation::math
     // Aliases
     //=========================================================
 
+    using Mat2f = Matrix2<float>;
+    using Mat2d = Matrix2<double>;
+
     using Mat3f = Matrix3<float>;
     using Mat3d = Matrix3<double>;
 
@@ -1330,6 +1887,10 @@ export namespace kairo::foundation::math
     // Compile-Time Validation
     //=========================================================
 
+    static_assert(Matrix2<float>::Rows == 2);
+    static_assert(Matrix2<float>::Columns == 2);
+    static_assert(Matrix2<float>::ElementCount == 4);
+
     static_assert(Matrix3<float>::Rows == 3);
     static_assert(Matrix3<float>::Columns == 3);
     static_assert(Matrix3<float>::ElementCount == 9);
@@ -1338,12 +1899,15 @@ export namespace kairo::foundation::math
     static_assert(Matrix4<float>::Columns == 4);
     static_assert(Matrix4<float>::ElementCount == 16);
 
+    static_assert(std::is_trivially_copyable_v<Mat2f>);
     static_assert(std::is_trivially_copyable_v<Mat3f>);
     static_assert(std::is_trivially_copyable_v<Mat4f>);
 
+    static_assert(std::is_standard_layout_v<Mat2f>);
     static_assert(std::is_standard_layout_v<Mat3f>);
     static_assert(std::is_standard_layout_v<Mat4f>);
 
+    static_assert(sizeof(Mat2f) == sizeof(float) * 4);
     static_assert(sizeof(Mat3f) == sizeof(float) * 9);
     static_assert(sizeof(Mat4f) == sizeof(float) * 16);
 
