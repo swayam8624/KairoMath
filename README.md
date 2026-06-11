@@ -61,6 +61,30 @@ All types, constants, and math functions live inside the C++ namespace:
 kairo::foundation::math
 ```
 
+### Umbrella Import
+
+Use the umbrella module when a translation unit needs the full math surface:
+
+```cpp
+import Kairo.Foundation.Math;
+```
+
+Use narrower module imports when you want tighter compile dependencies:
+
+```cpp
+import Kairo.Foundation.Math.Vector;
+import Kairo.Foundation.Math.Matrix;
+import Kairo.Foundation.Math.Quaternion;
+import Kairo.Foundation.Math.Transform;
+import Kairo.Foundation.Math.DynamicMatrix;
+import Kairo.Foundation.Math.Tensor;
+import Kairo.Foundation.Math.LinearAlgebra.LinearSolve;
+import Kairo.Foundation.Math.LinearAlgebra.Decomposition;
+import Kairo.Foundation.Math.LinearAlgebra.Eigen;
+import Kairo.Foundation.Math.LinearAlgebra.SVD;
+import Kairo.Foundation.Math.LinearAlgebra.Statistics;
+```
+
 ---
 
 ## Core Features & Stabilization Fixes
@@ -140,46 +164,65 @@ brew install llvm ninja cmake
 
 ## Interactive Visual Lab & API Server
 
-`KairoMath` includes a premium, interactive web dashboard (`visual_tests.html`) and local server gateway (`server.py`) to visualize all functionalities using the compiled C++ library.
+`KairoMath` includes a local python gateway server (`server.py`) and standard HTML visualizer to interactively test and verify all mathematical algorithms with the C++ backend.
 
 ### Architecture
 
 ```text
-  [ Front-End Dashboard ] (Browser)
-            │  (REST API / JSON)
-            ▼
-   [ Python API Server ] (server.py)
-            │  (std::cin / std::cout)
-            ▼
-    [ C++ Math Engine ] (MathVisualizer --api)
+  [ Next.js Portal / Web Dashboard ] (Browser)
+                 │  (REST API / JSON)
+                 ▼
+      [ Python API Server ] (visual/server.py)
+                 │  (std::cin / std::cout)
+                 ▼
+       [ C++ Math Engine ] (MathVisualizer --api)
 ```
 
-1.  **C++ API mode**: The `MathVisualizer` binary accepts `--api` which reads mathematical tasks from `stdin` (in simple text protocol format), performs calculations, and prints a single-line JSON result to `stdout`.
-2.  **Python API Gateway**: `server.py` listens on `http://localhost:8080`. It serves `visual_tests.html` statically and routes `/api/<endpoint>` requests directly to a spawned C++ `MathVisualizer --api` subprocess.
-3.  **Web Dashboard**: Built using modern Outfit typography, smooth animations, and glassmorphism. It automatically detects if the Python/C++ server is connected (green live indicator) or offline (falling back to local JS mock/approximations).
+1. **C++ API Mode**: The `MathVisualizer` binary accepts `--api` which reads mathematical payloads from `stdin`, executes calculations, and prints a single-line JSON result to `stdout`.
+2. **Python API Gateway**: The script `visual/server.py` listens on `http://localhost:8080`. It routes `/api/<endpoint>` requests directly to a spawned C++ `MathVisualizer --api` subprocess, enabling web dashboards to run calculations on the native C++ library.
+3. **Legacy HTML Visualizer**: Located at `visual/visual_tests.html`, this single-page dashboard can be served statically.
 
 ### Running the Live Visual Lab
 
-1.  **Ensure the C++ Visualizer is compiled**:
-    ```bash
-    cmake --build build
-    ```
-2.  **Start the Python gateway server**:
-    ```bash
-    python3 server.py
-    ```
-3.  **Access the Dashboard**:
-    Open [http://localhost:8080/visual_tests.html](http://localhost:8080/visual_tests.html) in your browser.
+1. **Ensure the C++ Visualizer is compiled**:
+   ```bash
+   cmake --build build
+   ```
+2. **Start the Python gateway server**:
+   ```bash
+   python3 visual/server.py
+   ```
+3. **Access the Legacy Dashboard**:
+   Open [http://localhost:8080/visual_tests.html](http://localhost:8080/visual_tests.html) in your browser.
 
-### Laboratories Included
+---
 
-*   **Vector Operations Lab**: Interactive projection, reflection, and refraction. Tweak refractive indices to see Snell's law in action and watch the refracted ray disappear during **Total Internal Reflection**.
-*   **Linear Solver Lab**: Solve systems of equations $A x = b$ for dimensions up to $4\times 4$. Dynamically modify the input cells and instantly view the calculated solution vector along with its row-echelon forms (REF & RREF).
-*   **Matrix Decomposition Lab**: Computes LU, LUP (with permutation vectors), QR, Cholesky, and LDLT factorizations.
-*   **Eigen & SVD Lab**: Computes eigenvalues, eigenvectors, and Singular Value Decompositions ($U \Sigma V^T$) of custom matrices.
-*   **PCA & Regression Lab**: Click on the canvas grid to add 2D data points. The C++ Statistics engine dynamically recalculates and draws the linear regression line (in pink) and principal component variance axes (in green/yellow) in real-time.
-*   **3D Transform Cube**: Adjust translation, scale, pitch, and yaw rotation sliders to rotate a 3D wireframe cube, rendering the composed TRS $4\times 4$ transformation matrix calculated by the C++ engine.
-*   **General Matrix Sandbox Lab**: Configure dynamic dimensions (from 2x2 up to 6x6), load presets (Identity, Hilbert, Symmetric, Diagonal, Random, Zero), and trigger core linear algebra operations (Rank, Determinant, Inverse, Condition Number, Decompositions, Eigen, SVD). Displays output matrices with bracket formatting and computes relative errors for mathematical verification.
+## Premium Documentation Portal (Next.js + Shadcn UI)
+
+A next-generation developer documentation portal is located in the `Kairo/docs` directory. It is built using **Next.js (App Router)**, **TypeScript**, **Tailwind CSS v4**, and **Shadcn UI**.
+
+### Features
+
+* **Structured Interactive Guides**: Detailed compiler configurations, CMake setup, and modular reference docs for Vectors, Quaternions, Linear Solvers, and Applied Statistics.
+* **Interactive Playgrounds**:
+  - *Vector Algebra Lab*: Vector projection & Snell refraction with Total Internal Reflection boundary visualizer on SVG.
+  - *TRS Transform Lab*: 3D wireframe cube renderer showing real-time 4x4 transform matrices.
+  - *Applied Statistics Lab*: Add 2D data points to compute regression lines and Principal Component Analysis (PCA) axes.
+  - *General Matrix Sandbox*: Run Determinants, Inverses, Rank, Condition Numbers, LUP decompositions, SVD, and QR sweeps on 2x2 to 6x6 matrices.
+* **Hybrid Execution Engine**: Automatically routes computations to the native C++ engine (port `8080`) when online, and defaults to type-safe client-side JavaScript calculations when offline.
+
+### Running the Documentation Portal
+
+1. **Launch the C++ API Server**:
+   ```bash
+   python3 Foundation/KairoMath/visual/server.py
+   ```
+2. **Launch the Next.js Dev Server**:
+   ```bash
+   cd docs
+   npm run dev
+   ```
+3. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
@@ -249,7 +292,7 @@ DynamicMatrix<double> A(3, 3);
 A(0,0)=2.0; A(0,1)=1.0; A(0,2)=1.0;
 A(1,0)=1.0; A(1,1)=3.0; A(1,2)=1.0;
 A(2,0)=1.0; A(2,1)=1.0; A(2,2)=4.0;
-[Matrix.cppm](Matrix.cppm)
+
 std::vector<double> b = {2.0, 3.0, 4.0};
 
 // Solve system A x = b
