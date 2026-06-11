@@ -34,6 +34,7 @@ target_sources(KairoMath
             Eigen.cppm
             SVD.cppm
             Statistics.cppm
+            KairoMath.cppm
 )
 
 if(KAIRO_MATH_BUILD_TESTS)
