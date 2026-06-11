@@ -28,6 +28,7 @@ target_sources(KairoMath
             Quaternion.cppm
             Transform.cppm
             DynamicMatrix.cppm
+            Tensor.cppm
             LinearSolve.cppm
             Decomposition.cppm
             Eigen.cppm
