@@ -648,6 +648,7 @@ TEST_CASE("Statistics Phase 5", "[Statistics]")
         REQUIRE(cov.Rows() == 2);
         REQUIRE(cov(0, 0) == 1.0f);
         REQUIRE(cov(0, 1) == 2.0f);
+        REQUIRE(NearlyEqual(cov, cov.Transpose()));
 
         auto corr = CorrelationMatrix(X);
         REQUIRE(std::abs(corr(0, 1) - 1.0f) < 1e-4f); // Perfectly correlated
@@ -666,6 +667,7 @@ TEST_CASE("Statistics Phase 5", "[Statistics]")
         auto pca = PCA(X);
         REQUIRE(pca.explainedVariance[0] > pca.explainedVariance[1]);
         REQUIRE(pca.components.Rows() == 2);
+        REQUIRE(IsIdentity(pca.components.Transpose() * pca.components, 1.0e-4f));
 
         // Linear Regression
         DynamicMatrix<float> RegX(3, 2, {
