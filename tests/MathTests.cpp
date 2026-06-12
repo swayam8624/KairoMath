@@ -16,6 +16,8 @@ import Kairo.Foundation.Math.LinearAlgebra.Eigen;
 import Kairo.Foundation.Math.LinearAlgebra.SVD;
 import Kairo.Foundation.Math.LinearAlgebra.Statistics;
 import Kairo.Foundation.Math.LinearAlgebra.MatrixFunctions;
+import Kairo.Foundation.Math.Optimization;
+import Kairo.Foundation.Math.Probability;
 
 using namespace kairo::foundation::math;
 
@@ -1051,5 +1053,317 @@ TEST_CASE("Matrix Functions Phase 6", "[LinearAlgebra][MatrixFunctions]")
         REQUIRE_THROWS_AS(
             MatrixExponential(nonsquare),
             std::invalid_argument);
+    }
+}
+
+TEST_CASE("Optimization Phase C", "[Optimization]")
+{
+    auto objective =
+        [](const std::vector<double>& x)
+        {
+            const double dx =
+                x[0] - 3.0;
+
+            const double dy =
+                x[1] + 2.0;
+
+            return (dx * dx) + (dy * dy);
+        };
+
+    auto gradient =
+        [](const std::vector<double>& x)
+        {
+            return std::vector<double>
+            {
+                2.0 * (x[0] - 3.0),
+                2.0 * (x[1] + 2.0)
+            };
+        };
+
+    OptimizationOptions<double> options;
+    options.MaxIterations = 600;
+    options.LearningRate = 0.1;
+    options.GradientTolerance = 1.0e-8;
+
+    SECTION("Gradient descent, momentum, Nesterov, and Adam minimize a quadratic")
+    {
+        auto gd =
+            GradientDescent(
+                objective,
+                gradient,
+                std::vector<double>{ 0.0, 0.0 },
+                options);
+
+        REQUIRE(gd.Converged);
+        REQUIRE(std::abs(gd.Position[0] - 3.0) < 1.0e-5);
+        REQUIRE(std::abs(gd.Position[1] + 2.0) < 1.0e-5);
+
+        auto momentum =
+            Momentum(
+                objective,
+                gradient,
+                std::vector<double>{ 0.0, 0.0 },
+                options);
+
+        REQUIRE(momentum.Value < 1.0e-6);
+
+        auto nesterov =
+            Nesterov(
+                objective,
+                gradient,
+                std::vector<double>{ 0.0, 0.0 },
+                options);
+
+        REQUIRE(nesterov.Value < 1.0e-6);
+
+        options.LearningRate = 0.05;
+        auto adam =
+            Adam(
+                objective,
+                gradient,
+                std::vector<double>{ 0.0, 0.0 },
+                options);
+
+        REQUIRE(adam.Value < 1.0e-5);
+    }
+
+    SECTION("Newton solves a quadratic in one direct step")
+    {
+        auto hessian =
+            [](const std::vector<double>&)
+            {
+                return DynamicMatrix<double>(2, 2, {
+                    2.0, 0.0,
+                    0.0, 2.0
+                });
+            };
+
+        auto result =
+            Newton(
+                objective,
+                gradient,
+                hessian,
+                std::vector<double>{ 0.0, 0.0 },
+                options);
+
+        REQUIRE(result.Value < 1.0e-20);
+        REQUIRE(std::abs(result.Position[0] - 3.0) < 1.0e-10);
+        REQUIRE(std::abs(result.Position[1] + 2.0) < 1.0e-10);
+    }
+
+    SECTION("Gauss Newton and Levenberg Marquardt solve least squares")
+    {
+        auto residual =
+            [](const std::vector<double>& x)
+            {
+                return std::vector<double>
+                {
+                    x[0] - 4.0,
+                    x[1] + 1.0
+                };
+            };
+
+        auto jacobian =
+            [](const std::vector<double>&)
+            {
+                return DynamicMatrix<double>(2, 2, {
+                    1.0, 0.0,
+                    0.0, 1.0
+                });
+            };
+
+        auto gaussNewton =
+            GaussNewton(
+                residual,
+                jacobian,
+                std::vector<double>{ 0.0, 0.0 },
+                options);
+
+        REQUIRE(gaussNewton.Value < 1.0e-20);
+        REQUIRE(std::abs(gaussNewton.Position[0] - 4.0) < 1.0e-10);
+        REQUIRE(std::abs(gaussNewton.Position[1] + 1.0) < 1.0e-10);
+
+        auto lm =
+            LevenbergMarquardt(
+                residual,
+                jacobian,
+                std::vector<double>{ 0.0, 0.0 },
+                options);
+
+        REQUIRE(lm.Value < 1.0e-8);
+    }
+
+    SECTION("CG, preconditioned CG, and GMRES solve linear systems")
+    {
+        DynamicMatrix<double> spd(2, 2, {
+            4.0, 1.0,
+            1.0, 3.0
+        });
+
+        std::vector<double> b =
+        {
+            1.0,
+            2.0
+        };
+
+        options.MaxIterations = 20;
+        options.GradientTolerance = 1.0e-10;
+
+        auto cg =
+            ConjugateGradient(
+                spd,
+                b,
+                {},
+                options);
+
+        REQUIRE(cg.Converged);
+        REQUIRE(std::abs(cg.Solution[0] - (1.0 / 11.0)) < 1.0e-9);
+        REQUIRE(std::abs(cg.Solution[1] - (7.0 / 11.0)) < 1.0e-9);
+
+        auto pcg =
+            PreconditionedConjugateGradient(
+                spd,
+                b,
+                std::vector<double>{ 0.25, 1.0 / 3.0 },
+                {},
+                options);
+
+        REQUIRE(pcg.Converged);
+        REQUIRE(std::abs(pcg.Solution[0] - (1.0 / 11.0)) < 1.0e-9);
+        REQUIRE(std::abs(pcg.Solution[1] - (7.0 / 11.0)) < 1.0e-9);
+
+        DynamicMatrix<double> nonsymmetric(2, 2, {
+            3.0, 1.0,
+            0.0, 2.0
+        });
+
+        auto gmres =
+            GMRES(
+                nonsymmetric,
+                std::vector<double>{ 5.0, 4.0 },
+                {},
+                options,
+                2);
+
+        REQUIRE(gmres.Converged);
+        REQUIRE(std::abs(gmres.Solution[0] - 1.0) < 1.0e-8);
+        REQUIRE(std::abs(gmres.Solution[1] - 2.0) < 1.0e-8);
+    }
+
+    SECTION("Lagrange multipliers and QP solve equality constrained quadratic")
+    {
+        DynamicMatrix<double> H(2, 2, {
+            1.0, 0.0,
+            0.0, 1.0
+        });
+
+        std::vector<double> g =
+        {
+            0.0,
+            0.0
+        };
+
+        DynamicMatrix<double> A(1, 2, {
+            1.0, 1.0
+        });
+
+        std::vector<double> b =
+        {
+            1.0
+        };
+
+        auto lagrange =
+            LagrangeMultipliers(
+                H,
+                g,
+                A,
+                b);
+
+        REQUIRE(std::abs(lagrange.Primal[0] - 0.5) < 1.0e-10);
+        REQUIRE(std::abs(lagrange.Primal[1] - 0.5) < 1.0e-10);
+        REQUIRE(lagrange.KKTResidualNorm < 1.0e-10);
+
+        auto qp =
+            QuadraticProgramming(
+                H,
+                g,
+                A,
+                b);
+
+        REQUIRE(std::abs(qp.ObjectiveValue - 0.25) < 1.0e-10);
+    }
+}
+
+TEST_CASE("Probability Phase D", "[Probability][Statistics]")
+{
+    SECTION("Distributions expose analytic density, CDF, moments, and validation")
+    {
+        UniformDistribution<double> uniform(-2.0, 2.0);
+        REQUIRE(std::abs(uniform.Pdf(0.0) - 0.25) < 1.0e-12);
+        REQUIRE(std::abs(uniform.Cdf(0.0) - 0.5) < 1.0e-12);
+        REQUIRE(std::abs(uniform.MeanValue()) < 1.0e-12);
+        REQUIRE(std::abs(uniform.Variance() - (16.0 / 12.0)) < 1.0e-12);
+
+        NormalDistribution<double> normal(0.0, 1.0);
+        REQUIRE(std::abs(normal.Cdf(0.0) - 0.5) < 1.0e-12);
+        REQUIRE(std::abs(normal.Pdf(0.0) - 0.3989422804014327) < 1.0e-12);
+
+        BernoulliDistribution<double> bernoulli(0.25);
+        REQUIRE(std::abs(bernoulli.Pmf(true) - 0.25) < 1.0e-12);
+        REQUIRE(std::abs(bernoulli.Variance() - 0.1875) < 1.0e-12);
+
+        ExponentialDistribution<double> exponential(2.0);
+        REQUIRE(std::abs(exponential.MeanValue() - 0.5) < 1.0e-12);
+        REQUIRE(std::abs(exponential.Cdf(0.0)) < 1.0e-12);
+
+        REQUIRE_THROWS_AS(UniformDistribution<double>(1.0, 1.0), std::invalid_argument);
+        REQUIRE_THROWS_AS(NormalDistribution<double>(0.0, 0.0), std::invalid_argument);
+        REQUIRE_THROWS_AS(BernoulliDistribution<double>(1.5), std::invalid_argument);
+        REQUIRE_THROWS_AS(ExponentialDistribution<double>(0.0), std::invalid_argument);
+    }
+
+    SECTION("Sampling uses explicit deterministic random generator state")
+    {
+        RandomGenerator first(1234);
+        RandomGenerator second(1234);
+
+        UniformDistribution<double> uniform(10.0, 20.0);
+
+        const double firstSample =
+            uniform.Sample(first);
+
+        const double secondSample =
+            uniform.Sample(second);
+
+        REQUIRE(firstSample >= 10.0);
+        REQUIRE(firstSample < 20.0);
+        REQUIRE(firstSample == secondSample);
+
+        NormalDistribution<double> normal(3.0, 2.0);
+        REQUIRE(normal.Sample(first) == normal.Sample(second));
+
+        std::size_t index =
+            SampleWeightedIndex(
+                std::vector<double>{ 0.0, 0.0, 1.0 },
+                first);
+
+        REQUIRE(index == 2);
+        REQUIRE_THROWS_AS(SampleWeightedIndex(std::vector<double>{ 0.0, 0.0 }, first), std::invalid_argument);
+    }
+
+    SECTION("Sample analysis helpers compute mean and variance")
+    {
+        std::vector<double> samples =
+        {
+            1.0,
+            2.0,
+            3.0,
+            4.0
+        };
+
+        REQUIRE(std::abs(Mean(samples) - 2.5) < 1.0e-12);
+        REQUIRE(std::abs(Variance(samples, false) - 1.25) < 1.0e-12);
+        REQUIRE(std::abs(Variance(samples, true) - (5.0 / 3.0)) < 1.0e-12);
+        REQUIRE(std::abs(StandardDeviation(samples, false) - std::sqrt(1.25)) < 1.0e-12);
     }
 }

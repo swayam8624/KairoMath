@@ -35,6 +35,8 @@ target_sources(KairoMath
             SVD.cppm
             Statistics.cppm
             MatrixFunctions.cppm
+            Optimization.cppm
+            Probability.cppm
             KairoMath.cppm
 )
 

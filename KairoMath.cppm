@@ -12,3 +12,5 @@ export import Kairo.Foundation.Math.LinearAlgebra.Eigen;
 export import Kairo.Foundation.Math.LinearAlgebra.SVD;
 export import Kairo.Foundation.Math.LinearAlgebra.Statistics;
 export import Kairo.Foundation.Math.LinearAlgebra.MatrixFunctions;
+export import Kairo.Foundation.Math.Optimization;
+export import Kairo.Foundation.Math.Probability;

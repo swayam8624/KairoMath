@@ -13,7 +13,7 @@ Most C++ math libraries (like GLM) are header-only and rely on massive, legacy p
 *   **Lightning Compile Times**: Module interfaces are compiled once into binary module interfaces (`.pcm`), bypassing the need to re-parse headers across translation units.
 *   **TRS Transform Paradigm**: Separation of Translation, Rotation (Quaternion), and Scale instead of using generic 4x4 matrices. This prevents floating-point drift, simplifies animation blending/interpolation (via SLerp), and provides clean editor ergonomics.
 *   **API Agnostic & Vulkan Ready**: Follows standard **row-major memory storage** (for direct pointer uploads via `.Data()`), **column-vector multiplication** ($v' = M \cdot v$), and **Vulkan-style projection conventions** (Z depth mapped to `[0, 1]`).
-*   **Linear Algebra Suite**: Built-in support for dynamically sized matrices, linear system solvers, matrix decompositions, eigenvalue solvers, SVD, PCA, and regression.
+*   **Numerical Suite**: Built-in support for dynamically sized matrices, linear system solvers, matrix decompositions, eigenvalue solvers, SVD, PCA, regression, optimization, probability distributions, and deterministic sampling.
 *   **No Runtime Allocations for Core Geometry**: Geometry types (Vec/Mat/Quat) are trivially copyable, allocation-free, stack-allocated structs designed for cache-friendly access.
 
 ---
@@ -58,6 +58,26 @@ DynamicMatrix (arbitrary dimensions)
     import Kairo.Foundation.Math.LinearAlgebra.MatrixFunctions;
     ```
 
+### 3. Optimization & Probability
+```text
+Optimization
+  ├── First-order optimizers (Gradient Descent, Momentum, Nesterov, Adam)
+  ├── Classical nonlinear solvers (Newton, Gauss-Newton, Levenberg-Marquardt)
+  ├── Iterative linear solvers (CG, Preconditioned CG, GMRES)
+  └── Equality-constrained QP / KKT solvers
+
+Probability
+  ├── RandomGenerator
+  ├── Uniform / Normal / Bernoulli / Exponential distributions
+  ├── Weighted discrete sampling
+  └── Mean / Variance / StandardDeviation sample analysis
+```
+*   **Import Interfaces**:
+    ```cpp
+    import Kairo.Foundation.Math.Optimization;
+    import Kairo.Foundation.Math.Probability;
+    ```
+
 All types, constants, and math functions live inside the C++ namespace:
 ```cpp
 kairo::foundation::math
@@ -86,6 +106,8 @@ import Kairo.Foundation.Math.LinearAlgebra.Eigen;
 import Kairo.Foundation.Math.LinearAlgebra.SVD;
 import Kairo.Foundation.Math.LinearAlgebra.Statistics;
 import Kairo.Foundation.Math.LinearAlgebra.MatrixFunctions;
+import Kairo.Foundation.Math.Optimization;
+import Kairo.Foundation.Math.Probability;
 ```
 
 ### Verified Foundation Status
@@ -97,6 +119,18 @@ The current module surface is complete for the Phase A math foundation:
 module file set. The Phase B linear algebra surface includes
 `MatrixExponential()` implemented through scaling-and-squaring plus a [13/13]
 Pade approximant.
+
+Phase C optimization is exported through `Kairo.Foundation.Math.Optimization`
+and includes gradient descent, momentum, Nesterov, Adam, Newton, Gauss-Newton,
+Levenberg-Marquardt, conjugate gradient, preconditioned conjugate gradient,
+GMRES, Lagrange multiplier KKT solves, and equality-constrained quadratic
+programming.
+
+Phase D statistics/probability is complete for the roadmap surface:
+`Kairo.Foundation.Math.LinearAlgebra.Statistics` covers covariance,
+correlation, PCA, regression, and least-squares-backed regression, while
+`Kairo.Foundation.Math.Probability` covers distributions, sampling, explicit
+random generators, weighted discrete sampling, and sample mean/variance helpers.
 
 ### Validation Policy
 
@@ -135,19 +169,19 @@ The inverse of a rotated non-uniform scale transform introduces **shear**. Becau
 ### 4. Robust Gauss-Jordan Elimination with Partial Pivoting
 For `Inverse(Matrix4)` and general linear solver functions, `KairoMath` uses Gauss-Jordan elimination with partial pivoting. This approach is highly robust against singular/near-singular matrices and provides numerical stability by finding the largest pivot element in each column to prevent division by near-zero values.
 
-### 5. Production-Grade Matrix Operations (LUP-Based)
+### 5. Robust Matrix Operations (LUP-Based)
 For arbitrary dynamically-sized matrices (`DynamicMatrix`), `KairoMath` provides LUP-decomposition-based implementations of key linear algebra operations:
 *   **`Determinant`**: Computes the determinant using LUP decomposition, tracking the sign of the permutation vector via disjoint cycle decomposition, and multiplying diagonal entries of $U$.
 *   **`Inverse`**: Inverts a square matrix by performing forward/backward substitution on LUP factors column-by-column against the identity matrix.
 *   **`Rank`**: Computes the 2-norm rank using Singular Value Decomposition with a robust tolerance scale.
 *   **`ConditionNumber`**: Computes the 2-norm condition number ($\sigma_{\max} / \sigma_{\min}$) utilizing the singular values from SVD, returning infinity for singular matrices.
 
-### 6. Upgraded Eigen Solver (Householder Reduction & Tridiagonalization)
+### 6. Householder Eigen Solver (Reduction & Tridiagonalization)
 Symmetric eigenvalues and eigenvectors are computed using the standard production pipeline:
 1.  **Householder Reduction**: Reduces the symmetric matrix to symmetric tridiagonal form ($T = Q^T A Q$) in one pass of Householder reflections.
 2.  **Implicit QR Sweeps**: Runs the implicitly shifted symmetric QR algorithm with Wilkinson shifts directly on $T$. This reduces the complexity per iteration from $O(n^3)$ to $O(n)$.
 
-### 7. Upgraded SVD Solver (Golub-Kahan Bidiagonal SVD)
+### 7. Golub-Kahan Bidiagonal SVD Solver
 Thin Singular Value Decomposition is computed using bidiagonalization:
 1.  **Golub-Kahan Bidiagonalization**: Alternates left and right Householder reflections to reduce a general rectangular matrix to upper bidiagonal form ($B = U_{bid}^T A V_{bid}$).
 2.  **Bidiagonal SVD**: Computes the SVD of $B$ by solving the eigenvalues of the symmetric tridiagonal matrix $T = B^T B$ using the fast tridiagonal QR algorithm, and then accumulates the left and right singular vectors.
