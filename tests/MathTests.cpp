@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <algorithm>
+#include <stdexcept>
 #include <vector>
 
 import Kairo.Foundation.Math.Vector;
@@ -13,6 +14,7 @@ import Kairo.Foundation.Math.LinearAlgebra.Decomposition;
 import Kairo.Foundation.Math.LinearAlgebra.Eigen;
 import Kairo.Foundation.Math.LinearAlgebra.SVD;
 import Kairo.Foundation.Math.LinearAlgebra.Statistics;
+import Kairo.Foundation.Math.LinearAlgebra.MatrixFunctions;
 
 using namespace kairo::foundation::math;
 
@@ -885,5 +887,86 @@ TEST_CASE("Eigen and SVD Advanced Decompositions", "[LinearAlgebra][Decompositio
     }
 }
 
+TEST_CASE("Matrix Functions Phase 6", "[LinearAlgebra][MatrixFunctions]")
+{
+    SECTION("Matrix exponential of zero is identity")
+    {
+        DynamicMatrix<double> zero =
+            DynamicMatrix<double>::Zero(3, 3);
 
+        DynamicMatrix<double> expZero =
+            MatrixExponential(zero);
+
+        REQUIRE(IsIdentity(expZero, 1e-12));
+    }
+
+    SECTION("Matrix exponential of diagonal matrix exponentiates diagonal entries")
+    {
+        DynamicMatrix<double> diagonal =
+            DynamicMatrix<double>::Diagonal(
+                std::vector<double>
+                {
+                    0.0,
+                    1.0,
+                    -1.0
+                });
+
+        DynamicMatrix<double> expDiagonal =
+            MatrixExponential(diagonal);
+
+        REQUIRE(std::abs(expDiagonal(0, 0) - 1.0) < 1e-11);
+        REQUIRE(std::abs(expDiagonal(1, 1) - std::exp(1.0)) < 1e-11);
+        REQUIRE(std::abs(expDiagonal(2, 2) - std::exp(-1.0)) < 1e-11);
+        REQUIRE(std::abs(expDiagonal(0, 1)) < 1e-12);
+        REQUIRE(std::abs(expDiagonal(1, 2)) < 1e-12);
+    }
+
+    SECTION("Matrix exponential of nilpotent matrix terminates as I + A")
+    {
+        DynamicMatrix<double> nilpotent(2, 2, {
+            0.0, 2.0,
+            0.0, 0.0
+        });
+
+        DynamicMatrix<double> expected(2, 2, {
+            1.0, 2.0,
+            0.0, 1.0
+        });
+
+        REQUIRE(NearlyEqual(
+            MatrixExponential(nilpotent),
+            expected,
+            1e-11));
+    }
+
+    SECTION("Matrix exponential of 2D skew generator produces rotation")
+    {
+        const double angle =
+            0.75;
+
+        DynamicMatrix<double> generator(2, 2, {
+            0.0, -angle,
+            angle, 0.0
+        });
+
+        DynamicMatrix<double> expected(2, 2, {
+            std::cos(angle), -std::sin(angle),
+            std::sin(angle),  std::cos(angle)
+        });
+
+        REQUIRE(NearlyEqual(
+            MatrixExponential(generator),
+            expected,
+            1e-11));
+    }
+
+    SECTION("Matrix exponential rejects non-square matrices")
+    {
+        DynamicMatrix<double> nonsquare(2, 3);
+
+        REQUIRE_THROWS_AS(
+            MatrixExponential(nonsquare),
+            std::invalid_argument);
+    }
+}
 

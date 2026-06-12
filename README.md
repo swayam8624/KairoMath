@@ -44,7 +44,8 @@ DynamicMatrix (arbitrary dimensions)
   ├── Decomposition (LU, LUP, QR, Cholesky, LDLT)
   ├── Eigen (Power Iteration, QR Eigenvalues)
   ├── SVD (Singular Value Decomposition)
-  └── Statistics (Covariance, PCA, Linear Regression)
+  ├── Statistics (Covariance, PCA, Linear Regression)
+  └── MatrixFunctions (Matrix Exponential)
 ```
 *   **Import Interfaces**:
     ```cpp
@@ -54,6 +55,7 @@ DynamicMatrix (arbitrary dimensions)
     import Kairo.Foundation.Math.LinearAlgebra.Eigen;
     import Kairo.Foundation.Math.LinearAlgebra.SVD;
     import Kairo.Foundation.Math.LinearAlgebra.Statistics;
+    import Kairo.Foundation.Math.LinearAlgebra.MatrixFunctions;
     ```
 
 All types, constants, and math functions live inside the C++ namespace:
@@ -83,14 +85,18 @@ import Kairo.Foundation.Math.LinearAlgebra.Decomposition;
 import Kairo.Foundation.Math.LinearAlgebra.Eigen;
 import Kairo.Foundation.Math.LinearAlgebra.SVD;
 import Kairo.Foundation.Math.LinearAlgebra.Statistics;
+import Kairo.Foundation.Math.LinearAlgebra.MatrixFunctions;
 ```
 
 ### Verified Foundation Status
 
 The current module surface is complete for the Phase A math foundation:
 `Vector`, `Matrix`, `Quaternion`, `Transform`, `DynamicMatrix`, `Tensor`,
-`LinearSolve`, `Decomposition`, `Eigen`, `SVD`, and `Statistics` are exported by
-the umbrella module and included in the CMake module file set.
+`LinearSolve`, `Decomposition`, `Eigen`, `SVD`, `Statistics`, and
+`MatrixFunctions` are exported by the umbrella module and included in the CMake
+module file set. The Phase B linear algebra surface includes
+`MatrixExponential()` implemented through scaling-and-squaring plus a [13/13]
+Pade approximant.
 
 ---
 
@@ -308,4 +314,22 @@ std::vector<double> x = LinearSolve(A, b);
 // Compute LUP Factorization
 LUPResult<double> res = LUP(A);
 // res.L, res.U, and res.P represent the components
+```
+
+### 5. Matrix Functions
+```cpp
+import Kairo.Foundation.Math.DynamicMatrix;
+import Kairo.Foundation.Math.LinearAlgebra.MatrixFunctions;
+
+using namespace kairo::foundation::math;
+
+// A 2D skew-symmetric generator. exp(A) is a rotation matrix.
+const double angle = 0.75;
+DynamicMatrix<double> generator(2, 2, {
+    0.0, -angle,
+    angle, 0.0
+});
+
+DynamicMatrix<double> rotation = MatrixExponential(generator);
+// rotation ~= [[cos(angle), -sin(angle)], [sin(angle), cos(angle)]]
 ```

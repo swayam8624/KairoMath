@@ -34,6 +34,7 @@ target_sources(KairoMath
             Eigen.cppm
             SVD.cppm
             Statistics.cppm
+            MatrixFunctions.cppm
             KairoMath.cppm
 )
 

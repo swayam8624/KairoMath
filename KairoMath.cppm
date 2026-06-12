@@ -11,3 +11,4 @@ export import Kairo.Foundation.Math.LinearAlgebra.Decomposition;
 export import Kairo.Foundation.Math.LinearAlgebra.Eigen;
 export import Kairo.Foundation.Math.LinearAlgebra.SVD;
 export import Kairo.Foundation.Math.LinearAlgebra.Statistics;
+export import Kairo.Foundation.Math.LinearAlgebra.MatrixFunctions;
