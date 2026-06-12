@@ -85,6 +85,13 @@ import Kairo.Foundation.Math.LinearAlgebra.SVD;
 import Kairo.Foundation.Math.LinearAlgebra.Statistics;
 ```
 
+### Verified Foundation Status
+
+The current module surface is complete for the Phase A math foundation:
+`Vector`, `Matrix`, `Quaternion`, `Transform`, `DynamicMatrix`, `Tensor`,
+`LinearSolve`, `Decomposition`, `Eigen`, `SVD`, and `Statistics` are exported by
+the umbrella module and included in the CMake module file set.
+
 ---
 
 ## Core Features & Stabilization Fixes
