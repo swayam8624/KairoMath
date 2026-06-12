@@ -9,6 +9,7 @@ import Kairo.Foundation.Math.Matrix;
 import Kairo.Foundation.Math.Quaternion;
 import Kairo.Foundation.Math.Transform;
 import Kairo.Foundation.Math.DynamicMatrix;
+import Kairo.Foundation.Math.Tensor;
 import Kairo.Foundation.Math.LinearAlgebra.LinearSolve;
 import Kairo.Foundation.Math.LinearAlgebra.Decomposition;
 import Kairo.Foundation.Math.LinearAlgebra.Eigen;
@@ -719,16 +720,6 @@ TEST_CASE("Linear Algebra Bugfixes", "[LinearAlgebraBugfixes]")
         REQUIRE(std::abs(rotated.Length() - 1.0f) < 1e-4f);
     }
 
-    SECTION("Transform Inverse Non-Uniform Scale Exceptions")
-    {
-        Transformf t;
-        t.Scale = Vec3f(1.0f, 2.0f, 1.0f);
-        REQUIRE_THROWS_AS(Inverse(t), std::invalid_argument);
-
-        t.Scale = Vec3f(0.0f, 1.0f, 1.0f);
-        REQUIRE_THROWS_AS(Inverse(t), std::invalid_argument);
-    }
-
     SECTION("Decomposition Non-Square Matrix Exceptions")
     {
         DynamicMatrix<float> A(3, 2);
@@ -752,6 +743,97 @@ TEST_CASE("Linear Algebra Bugfixes", "[LinearAlgebraBugfixes]")
         auto UT = svd.U.Transpose();
         auto UTU = UT * svd.U;
         REQUIRE(NearlyEqual(UTU, DynamicMatrix<float>::Identity(2)));
+    }
+}
+
+TEST_CASE("Dynamic API Validation Policy", "[DynamicMatrix][Tensor][Validation]")
+{
+    SECTION("DynamicMatrix rejects partial-empty and mismatched dimensions")
+    {
+        REQUIRE_THROWS_AS(
+            DynamicMatrix<float>(0, 3),
+            std::invalid_argument);
+
+        DynamicMatrix<float> a(2, 3);
+        DynamicMatrix<float> b(3, 2);
+        DynamicMatrix<float> c(2, 2);
+
+        REQUIRE_THROWS_AS(a + c, std::invalid_argument);
+        REQUIRE_THROWS_AS(a - c, std::invalid_argument);
+        REQUIRE_THROWS_AS(a * c, std::invalid_argument);
+        REQUIRE_THROWS_AS(a / 0.0f, std::domain_error);
+        REQUIRE_THROWS_AS(a.Trace(), std::invalid_argument);
+        REQUIRE_NOTHROW(a * b);
+    }
+
+    SECTION("Linear solvers reject invalid runtime dimensions")
+    {
+        DynamicMatrix<float> nonsquare(2, 3);
+        DynamicMatrix<float> square(2, 2, {
+            2.0f, 0.0f,
+            0.0f, 4.0f
+        });
+
+        std::vector<float> shortRhs = { 1.0f };
+        DynamicMatrix<float> matrixRhs(3, 1);
+
+        REQUIRE_THROWS_AS(LinearSolve(square, shortRhs), std::invalid_argument);
+        REQUIRE_THROWS_AS(LinearSolve(nonsquare, std::vector<float>{ 1.0f, 2.0f }), std::invalid_argument);
+        REQUIRE_THROWS_AS(LinearSolve(square, matrixRhs), std::invalid_argument);
+
+        DynamicMatrix<float> rhs(2, 2, {
+            2.0f, 4.0f,
+            8.0f, 12.0f
+        });
+
+        DynamicMatrix<float> solved =
+            LinearSolve(square, rhs);
+
+        REQUIRE(NearlyEqual(square * solved, rhs));
+    }
+
+    SECTION("Decomposition and statistics APIs reject invalid runtime inputs")
+    {
+        DynamicMatrix<float> wide(2, 3);
+        DynamicMatrix<float> tall(3, 2);
+
+        REQUIRE_THROWS_AS(QR(wide), std::invalid_argument);
+        REQUIRE_THROWS_AS(GolubKahanBidiagonalization(wide), std::invalid_argument);
+        REQUIRE_THROWS_AS(SingularValueDecomposition(DynamicMatrix<float>()), std::invalid_argument);
+        REQUIRE_THROWS_AS(PowerIteration(wide), std::invalid_argument);
+        REQUIRE_THROWS_AS(InversePowerIteration(wide), std::invalid_argument);
+        REQUIRE_THROWS_AS(ShiftedInversePowerIteration(wide, 1.0f), std::invalid_argument);
+        REQUIRE_THROWS_AS(QREigenVectors(wide), std::invalid_argument);
+        REQUIRE_THROWS_AS(LinearRegression(tall, std::vector<float>{ 1.0f, 2.0f }), std::invalid_argument);
+    }
+
+    SECTION("Tensor public kernels reject invalid data-driven shapes")
+    {
+        Tensor<float> logits({ 2, 0 });
+
+        REQUIRE_THROWS_AS(
+            SoftmaxLastDim(logits),
+            std::invalid_argument);
+
+        Tensor<float> labels({ 2, 3 }, {
+            1.0f, 0.0f, 0.0f,
+            0.0f, 1.0f, 0.0f
+        });
+
+        Tensor<float> probabilities({ 2, 3 }, {
+            0.5f, 0.25f, 0.25f,
+            0.1f, 0.8f, 0.1f
+        });
+
+        const float loss =
+            CrossEntropyMean(labels, probabilities);
+
+        const float expected =
+            (-std::log(0.5f + 1.0e-7f) -
+             std::log(0.8f + 1.0e-7f)) /
+            2.0f;
+
+        REQUIRE(std::abs(loss - expected) < 1.0e-5f);
     }
 }
 
@@ -969,4 +1051,3 @@ TEST_CASE("Matrix Functions Phase 6", "[LinearAlgebra][MatrixFunctions]")
             std::invalid_argument);
     }
 }
-

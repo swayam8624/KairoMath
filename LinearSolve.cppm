@@ -22,8 +22,15 @@ export namespace kairo::foundation::math
     [[nodiscard]]
     std::vector<T> ForwardSubstitution(const DynamicMatrix<T>& L, const std::vector<T>& b)
     {
-        assert(L.Rows() == L.Columns());
-        assert(L.Rows() == b.size());
+        if (L.Rows() != L.Columns())
+        {
+            throw std::invalid_argument("ForwardSubstitution failed: matrix must be square.");
+        }
+        if (L.Rows() != b.size())
+        {
+            throw std::invalid_argument("ForwardSubstitution failed: matrix rows must match b size.");
+        }
+
         std::size_t n = b.size();
         std::vector<T> x(n);
 
@@ -60,8 +67,15 @@ export namespace kairo::foundation::math
     [[nodiscard]]
     std::vector<T> BackwardSubstitution(const DynamicMatrix<T>& U, const std::vector<T>& b)
     {
-        assert(U.Rows() == U.Columns());
-        assert(U.Rows() == b.size());
+        if (U.Rows() != U.Columns())
+        {
+            throw std::invalid_argument("BackwardSubstitution failed: matrix must be square.");
+        }
+        if (U.Rows() != b.size())
+        {
+            throw std::invalid_argument("BackwardSubstitution failed: matrix rows must match b size.");
+        }
+
         std::size_t n = b.size();
         std::vector<T> x(n);
 
@@ -223,8 +237,15 @@ export namespace kairo::foundation::math
     [[nodiscard]]
     std::vector<T> GaussianElimination(const DynamicMatrix<T>& A, const std::vector<T>& b)
     {
-        assert(A.Rows() == A.Columns());
-        assert(A.Rows() == b.size());
+        if (A.Rows() != A.Columns())
+        {
+            throw std::invalid_argument("GaussianElimination failed: matrix must be square.");
+        }
+        if (A.Rows() != b.size())
+        {
+            throw std::invalid_argument("GaussianElimination failed: matrix rows must match b size.");
+        }
+
         std::size_t n = A.Rows();
 
         T maxAbs = T(0);
@@ -305,8 +326,15 @@ export namespace kairo::foundation::math
     [[nodiscard]]
     std::vector<T> GaussJordanElimination(const DynamicMatrix<T>& A, const std::vector<T>& b)
     {
-        assert(A.Rows() == A.Columns());
-        assert(A.Rows() == b.size());
+        if (A.Rows() != A.Columns())
+        {
+            throw std::invalid_argument("GaussJordanElimination failed: matrix must be square.");
+        }
+        if (A.Rows() != b.size())
+        {
+            throw std::invalid_argument("GaussJordanElimination failed: matrix rows must match b size.");
+        }
+
         std::size_t n = A.Rows();
 
         // Build augmented matrix [A | b]
@@ -348,6 +376,46 @@ export namespace kairo::foundation::math
     std::vector<T> LinearSolve(const DynamicMatrix<T>& A, const std::vector<T>& b)
     {
         return GaussianElimination(A, b);
+    }
+
+    /// Solve A * X = B for multiple right-hand sides.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    DynamicMatrix<T> LinearSolve(const DynamicMatrix<T>& A, const DynamicMatrix<T>& B)
+    {
+        if (A.Rows() != A.Columns())
+        {
+            throw std::invalid_argument("LinearSolve failed: coefficient matrix must be square.");
+        }
+        if (A.Rows() != B.Rows())
+        {
+            throw std::invalid_argument("LinearSolve failed: coefficient rows must match right-hand-side rows.");
+        }
+
+        const std::size_t n = A.Rows();
+        const std::size_t rhsCount = B.Columns();
+
+        LUPResult<T> lup = LUP(A);
+        DynamicMatrix<T> result(n, rhsCount);
+
+        for (std::size_t column = 0; column < rhsCount; ++column)
+        {
+            std::vector<T> rhs(n);
+            for (std::size_t row = 0; row < n; ++row)
+            {
+                rhs[row] = B(lup.P[row], column);
+            }
+
+            std::vector<T> y = ForwardSubstitution(lup.L, rhs);
+            std::vector<T> x = BackwardSubstitution(lup.U, y);
+
+            for (std::size_t row = 0; row < n; ++row)
+            {
+                result(row, column) = x[row];
+            }
+        }
+
+        return result;
     }
 
     /// Compute matrix inverse using LUP decomposition.

@@ -147,7 +147,11 @@ export namespace kairo::foundation::math
     {
         std::size_t n = X.Rows();
         std::size_t m = X.Columns();
-        assert(n == y.size());
+
+        if (n != y.size())
+        {
+            throw std::invalid_argument("LinearRegression failed: X rows must match y size.");
+        }
 
         // A^+ = PseudoInverse(X) of size m x n
         DynamicMatrix<T> invX = PseudoInverse(X);

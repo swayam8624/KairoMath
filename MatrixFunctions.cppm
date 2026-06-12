@@ -145,7 +145,9 @@ export namespace kairo::foundation::math
             identity * b0;
 
         DynamicMatrix<T> result =
-            Inverse(v - u) * (v + u);
+            LinearSolve(
+                v - u,
+                v + u);
 
         for (int i = 0; i < scalePower; ++i)
         {

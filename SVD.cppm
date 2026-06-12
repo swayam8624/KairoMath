@@ -43,7 +43,11 @@ export namespace kairo::foundation::math
     {
         std::size_t m = A.Rows();
         std::size_t n = A.Columns();
-        assert(m >= n);
+
+        if (m < n)
+        {
+            throw std::invalid_argument("GolubKahanBidiagonalization failed: row count must be greater than or equal to column count.");
+        }
 
         DynamicMatrix<T> B = A;
         DynamicMatrix<T> U = DynamicMatrix<T>::Identity(m);
@@ -193,7 +197,11 @@ export namespace kairo::foundation::math
     {
         std::size_t m = A.Rows();
         std::size_t n = A.Columns();
-        assert(m > 0 && n > 0);
+
+        if (m == 0 || n == 0)
+        {
+            throw std::invalid_argument("SingularValueDecomposition failed: matrix must be non-empty.");
+        }
 
         std::size_t k = std::min(m, n);
 

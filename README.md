@@ -1,6 +1,6 @@
 # KairoMath
 
-A high-performance, production-grade 3D math and linear algebra library written in modern C++23. Built entirely on **C++20/C++23 Modules** for lightning-fast compilation, strict encapsulation, and clean symbol isolation.
+A high-performance engine-foundation 3D math and linear algebra library written in modern C++23. Built entirely on **C++20/C++23 Modules** for lightning-fast compilation, strict encapsulation, and clean symbol isolation.
 
 `KairoMath` is designed to support high-performance game engines, CPU ray tracers, physics solvers, spatial indexing structures, and data science/robotics applications. It follows strict mathematical safety rules, avoids unnecessary runtime allocations, and maintains complete layout compatibility with GPU graphics APIs.
 
@@ -14,7 +14,7 @@ Most C++ math libraries (like GLM) are header-only and rely on massive, legacy p
 *   **TRS Transform Paradigm**: Separation of Translation, Rotation (Quaternion), and Scale instead of using generic 4x4 matrices. This prevents floating-point drift, simplifies animation blending/interpolation (via SLerp), and provides clean editor ergonomics.
 *   **API Agnostic & Vulkan Ready**: Follows standard **row-major memory storage** (for direct pointer uploads via `.Data()`), **column-vector multiplication** ($v' = M \cdot v$), and **Vulkan-style projection conventions** (Z depth mapped to `[0, 1]`).
 *   **Linear Algebra Suite**: Built-in support for dynamically sized matrices, linear system solvers, matrix decompositions, eigenvalue solvers, SVD, PCA, and regression.
-*   **No Runtime Allocations for Core Geometry**: Geometry types (Vec/Mat/Quat) are trivially copyable, allocation-free, stack-allocated structs designed for cash-friendly cache line access.
+*   **No Runtime Allocations for Core Geometry**: Geometry types (Vec/Mat/Quat) are trivially copyable, allocation-free, stack-allocated structs designed for cache-friendly access.
 
 ---
 
@@ -97,6 +97,15 @@ The current module surface is complete for the Phase A math foundation:
 module file set. The Phase B linear algebra surface includes
 `MatrixExponential()` implemented through scaling-and-squaring plus a [13/13]
 Pade approximant.
+
+### Validation Policy
+
+`KairoMath` uses asserts for programmer-contract violations in fixed-size hot
+path types such as `Vector`, `Matrix2/3/4`, `Quaternion`, and `Transform`.
+Dynamic and data-driven APIs such as `DynamicMatrix`, `Tensor`, and public
+linear algebra/statistics routines throw exceptions for invalid runtime input,
+including dimension mismatches, invalid shapes, non-square matrices, and
+singular systems.
 
 ---
 

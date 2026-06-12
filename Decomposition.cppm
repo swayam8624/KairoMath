@@ -189,7 +189,11 @@ export namespace kairo::foundation::math
     {
         std::size_t m = A.Rows();
         std::size_t n = A.Columns();
-        assert(m >= n);
+
+        if (m < n)
+        {
+            throw std::invalid_argument("QR decomposition failed: row count must be greater than or equal to column count.");
+        }
 
         DynamicMatrix<T> Q = DynamicMatrix<T>::Identity(m);
         DynamicMatrix<T> R = A;

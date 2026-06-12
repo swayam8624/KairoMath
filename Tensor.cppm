@@ -63,8 +63,10 @@ export namespace kairo::foundation::math
 
     public:
         /// Input: none.
-        /// Output: empty rank-0 tensor.
+        /// Output: empty tensor with rank 0 and zero logical elements.
         /// Task: support deferred construction and container usage.
+        /// Note: rank-0 scalar tensors should be constructed explicitly if that
+        /// semantic is added later; the default tensor is an empty value.
         Tensor()
             : m_storage(std::make_shared<std::vector<T>>())
         {
@@ -680,6 +682,12 @@ export namespace kairo::foundation::math
 
         Tensor<T> result(logits.GetShape());
         const std::size_t classes = logits.Dim(logits.Rank() - 1);
+
+        if (classes == 0)
+        {
+            throw std::invalid_argument("SoftmaxLastDim requires non-zero final dimension.");
+        }
+
         const std::size_t groups = logits.Size() / classes;
 
         for (std::size_t group = 0; group < groups; ++group)
@@ -727,7 +735,20 @@ export namespace kairo::foundation::math
                 sum += labels[i] * -std::log(probabilities[i] + epsilon);
             }
         }
-        return labels.Empty() ? T(0) : sum / static_cast<T>(labels.Size());
+
+        if (labels.Empty())
+        {
+            return T(0);
+        }
+
+        const std::size_t sampleCount =
+            labels.Rank() >= 2
+                ? labels.Dim(0)
+                : labels.Size();
+
+        return sampleCount == 0
+            ? T(0)
+            : sum / static_cast<T>(sampleCount);
     }
 
     /// Input: predictions and labels with the same shape.

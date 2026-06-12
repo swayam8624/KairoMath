@@ -6,6 +6,7 @@ module;
 #include <concepts>
 #include <cstddef>
 #include <initializer_list>
+#include <limits>
 #include <ostream>
 #include <stdexcept>
 #include <vector>
@@ -25,6 +26,22 @@ export namespace kairo::foundation::math
         std::size_t m_cols = 0;
         std::vector<T> m_data;
 
+        [[nodiscard]]
+        static std::size_t CheckedElementCount(std::size_t rows, std::size_t cols)
+        {
+            if ((rows == 0) != (cols == 0))
+            {
+                throw std::invalid_argument("DynamicMatrix shape error: rows and columns must both be zero or both be non-zero.");
+            }
+
+            if (cols != 0 && rows > std::numeric_limits<std::size_t>::max() / cols)
+            {
+                throw std::overflow_error("DynamicMatrix size overflow: rows * columns exceeds size_t.");
+            }
+
+            return rows * cols;
+        }
+
     public:
         using ValueType = T;
 
@@ -35,7 +52,7 @@ export namespace kairo::foundation::math
         DynamicMatrix(std::size_t rows, std::size_t cols)
             : m_rows(rows)
             , m_cols(cols)
-            , m_data(rows * cols, T(0))
+            , m_data(CheckedElementCount(rows, cols), T(0))
         {
         }
 
@@ -43,7 +60,7 @@ export namespace kairo::foundation::math
         DynamicMatrix(std::size_t rows, std::size_t cols, T initialValue)
             : m_rows(rows)
             , m_cols(cols)
-            , m_data(rows * cols, initialValue)
+            , m_data(CheckedElementCount(rows, cols), initialValue)
         {
         }
 
@@ -53,7 +70,7 @@ export namespace kairo::foundation::math
             , m_cols(cols)
             , m_data(std::move(data))
         {
-            if (m_data.size() != rows * cols)
+            if (m_data.size() != CheckedElementCount(rows, cols))
             {
                 throw std::invalid_argument("DynamicMatrix constructor error: vector size does not match rows * cols.");
             }
@@ -229,9 +246,13 @@ export namespace kairo::foundation::math
 
         /// Compute sum of diagonal elements (must be square).
         [[nodiscard]]
-        constexpr T Trace() const noexcept
+        T Trace() const
         {
-            assert(m_rows == m_cols);
+            if (m_rows != m_cols)
+            {
+                throw std::invalid_argument("DynamicMatrix::Trace failed: matrix must be square.");
+            }
+
             T sum = T(0);
             for (std::size_t i = 0; i < m_rows; ++i)
             {
@@ -259,10 +280,13 @@ export namespace kairo::foundation::math
     //=========================================================
 
     template<Arithmetic T>
-    DynamicMatrix<T>& operator+=(DynamicMatrix<T>& lhs, const DynamicMatrix<T>& rhs) noexcept
+    DynamicMatrix<T>& operator+=(DynamicMatrix<T>& lhs, const DynamicMatrix<T>& rhs)
     {
-        assert(lhs.Rows() == rhs.Rows());
-        assert(lhs.Columns() == rhs.Columns());
+        if (lhs.Rows() != rhs.Rows() || lhs.Columns() != rhs.Columns())
+        {
+            throw std::invalid_argument("DynamicMatrix addition failed: dimensions must match.");
+        }
+
         for (std::size_t i = 0; i < lhs.Size(); ++i)
         {
             lhs[i] += rhs[i];
@@ -271,10 +295,13 @@ export namespace kairo::foundation::math
     }
 
     template<Arithmetic T>
-    DynamicMatrix<T>& operator-=(DynamicMatrix<T>& lhs, const DynamicMatrix<T>& rhs) noexcept
+    DynamicMatrix<T>& operator-=(DynamicMatrix<T>& lhs, const DynamicMatrix<T>& rhs)
     {
-        assert(lhs.Rows() == rhs.Rows());
-        assert(lhs.Columns() == rhs.Columns());
+        if (lhs.Rows() != rhs.Rows() || lhs.Columns() != rhs.Columns())
+        {
+            throw std::invalid_argument("DynamicMatrix subtraction failed: dimensions must match.");
+        }
+
         for (std::size_t i = 0; i < lhs.Size(); ++i)
         {
             lhs[i] -= rhs[i];
@@ -293,9 +320,13 @@ export namespace kairo::foundation::math
     }
 
     template<Arithmetic T>
-    DynamicMatrix<T>& operator/=(DynamicMatrix<T>& matrix, T scalar) noexcept
+    DynamicMatrix<T>& operator/=(DynamicMatrix<T>& matrix, T scalar)
     {
-        assert(scalar != T(0));
+        if (scalar == T(0))
+        {
+            throw std::domain_error("DynamicMatrix division failed: scalar must be non-zero.");
+        }
+
         if constexpr (FloatingPoint<T>)
         {
             T inv = T(1) / scalar;
@@ -359,7 +390,11 @@ export namespace kairo::foundation::math
     [[nodiscard]]
     DynamicMatrix<T> operator*(const DynamicMatrix<T>& lhs, const DynamicMatrix<T>& rhs)
     {
-        assert(lhs.Columns() == rhs.Rows());
+        if (lhs.Columns() != rhs.Rows())
+        {
+            throw std::invalid_argument("DynamicMatrix multiplication failed: lhs.Columns() must equal rhs.Rows().");
+        }
+
         std::size_t r = lhs.Rows();
         std::size_t c = rhs.Columns();
         std::size_t k_size = lhs.Columns();

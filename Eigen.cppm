@@ -42,7 +42,10 @@ export namespace kairo::foundation::math
         std::size_t maxIterations = 1000,
         T tolerance = std::numeric_limits<T>::epsilon() * T(1e4))
     {
-        assert(A.Rows() == A.Columns());
+        if (A.Rows() != A.Columns())
+        {
+            throw std::invalid_argument("PowerIteration failed: matrix must be square.");
+        }
         std::size_t n = A.Rows();
 
         // Initial guess: non-uniform values to avoid symmetry issues
@@ -122,7 +125,10 @@ export namespace kairo::foundation::math
         std::size_t maxIterations = 1000,
         T tolerance = std::numeric_limits<T>::epsilon() * T(1e4))
     {
-        assert(A.Rows() == A.Columns());
+        if (A.Rows() != A.Columns())
+        {
+            throw std::invalid_argument("InversePowerIteration failed: matrix must be square.");
+        }
         std::size_t n = A.Rows();
 
         // Initial guess: non-uniform values to avoid symmetry issues
@@ -211,7 +217,10 @@ export namespace kairo::foundation::math
         std::size_t maxIterations = 1000,
         T tolerance = std::numeric_limits<T>::epsilon() * T(1e4))
     {
-        assert(A.Rows() == A.Columns());
+        if (A.Rows() != A.Columns())
+        {
+            throw std::invalid_argument("ShiftedInversePowerIteration failed: matrix must be square.");
+        }
         std::size_t n = A.Rows();
 
         // Shifted matrix: A - shift * I
@@ -412,7 +421,10 @@ export namespace kairo::foundation::math
         std::size_t maxIterations = 1000,
         T tolerance = std::numeric_limits<T>::epsilon() * T(1e4))
     {
-        assert(A.Rows() == A.Columns());
+        if (A.Rows() != A.Columns())
+        {
+            throw std::invalid_argument("QREigenVectors failed: matrix must be square.");
+        }
         std::size_t n = A.Rows();
         if (n == 0) return { {}, {} };
         if (n == 1) return { {A(0, 0)}, DynamicMatrix<T>::Identity(1) };
