@@ -63,8 +63,7 @@ DynamicMatrix (arbitrary dimensions)
 Optimization
   ├── First-order optimizers (Gradient Descent, Momentum, Nesterov, Adam)
   ├── Classical nonlinear solvers (Newton, Gauss-Newton, Levenberg-Marquardt)
-  ├── Iterative linear solvers (CG, Preconditioned CG, GMRES)
-  └── Equality-constrained QP / KKT solvers
+  └── Iterative SPD linear solver (Conjugate Gradient)
 
 Probability
   ├── RandomGenerator
@@ -122,15 +121,25 @@ Pade approximant.
 
 Phase C optimization is exported through `Kairo.Foundation.Math.Optimization`
 and includes gradient descent, momentum, Nesterov, Adam, Newton, Gauss-Newton,
-Levenberg-Marquardt, conjugate gradient, preconditioned conjugate gradient,
-GMRES, Lagrange multiplier KKT solves, and equality-constrained quadratic
-programming.
+Levenberg-Marquardt, and conjugate gradient for symmetric positive-definite
+linear systems. Optimization routines use `DynamicMatrix<T>` column vectors for
+state, gradients, residuals, and solver outputs so they align with the rest of
+the dynamic linear algebra API.
 
 Phase D statistics/probability is complete for the roadmap surface:
 `Kairo.Foundation.Math.LinearAlgebra.Statistics` covers covariance,
 correlation, PCA, regression, and least-squares-backed regression, while
 `Kairo.Foundation.Math.Probability` covers distributions, sampling, explicit
 random generators, weighted discrete sampling, and sample mean/variance helpers.
+
+### Downstream Foundation Consumers
+
+`KairoSpatial` consumes `KairoMath` through `KairoGeometry`. Spatial query
+structures rely on `Vector2`, `Vector3`, scalar tolerance helpers, dynamic matrix
+linear solves, and the DynamicMatrix-based optimization surface for broadphase,
+ray traversal, partitioning, nearest-neighbor, and navigation support. Keeping
+optimization state as `DynamicMatrix<T>` column vectors avoids a second vector
+container contract in higher engine layers.
 
 ### Validation Policy
 

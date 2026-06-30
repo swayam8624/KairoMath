@@ -6,6 +6,8 @@ module;
 #include <cstddef>
 #include <limits>
 #include <stdexcept>
+#include <string>
+#include <utility>
 #include <vector>
 
 export module Kairo.Foundation.Math.Optimization;
@@ -16,92 +18,122 @@ import Kairo.Foundation.Math.LinearAlgebra.LinearSolve;
 
 export namespace kairo::foundation::math
 {
-    /// Input: convergence tolerances and iteration limits for optimization routines.
-    /// Output: configuration object copied into iterative solvers.
-    /// Task: keep optimizer controls explicit without forcing every algorithm to
-    /// grow a long parameter list. `GradientTolerance` measures the first-order
-    /// stationarity residual and `StepTolerance` stops when updates become too
-    /// small to matter for the supplied scalar type.
+    //=========================================================
+    // Optimization Settings / Result
+    //=========================================================
+
     template<FloatingPoint T>
-    struct OptimizationOptions final
+    struct OptimizationSettings final
     {
-        std::size_t MaxIterations = 256;
+        std::size_t MaxIterations = 1000;
+
         T LearningRate = T(1e-2);
+
         T GradientTolerance = T(1e-6);
+
         T StepTolerance = T(1e-9);
-        T Damping = T(1e-3);
-        T Beta1 = T(0.9);
-        T Beta2 = T(0.999);
-        T Epsilon = T(1e-8);
+
+        T ValueTolerance = T(1e-12);
+
+        T ArmijoC1 = T(1e-4);
+
+        T BacktrackingShrink = T(0.5);
+
+        T MinimumStepScale = T(1e-12);
+
+        bool UseLineSearch = true;
     };
 
-    /// Input: final iterate, objective value, and convergence metadata.
-    /// Output: value object returned by nonlinear optimizers.
-    /// Task: make optimizer termination inspectable instead of returning only
-    /// the final vector and hiding whether tolerance or iteration budget ended
-    /// the solve.
     template<FloatingPoint T>
     struct OptimizationResult final
     {
-        std::vector<T> Position;
+        DynamicMatrix<T> X;
+
         T Value = T(0);
-        std::size_t Iterations = 0;
+
         T GradientNorm = T(0);
-        bool Converged = false;
-    };
 
-    /// Input: final Krylov solution and residual metadata.
-    /// Output: value object returned by iterative linear solvers.
-    /// Task: expose solver quality for sparse systems where a caller may choose
-    /// between more iterations, a different preconditioner, or a direct fallback.
-    template<FloatingPoint T>
-    struct IterativeSolveResult final
-    {
-        std::vector<T> Solution;
+        T StepNorm = T(0);
+
         std::size_t Iterations = 0;
-        T ResidualNorm = T(0);
+
         bool Converged = false;
+
+        std::string Message;
     };
 
-    /// Input: equality-constrained quadratic program solution.
-    /// Output: primal variables, Lagrange multipliers, objective value, and KKT residual.
-    /// Task: preserve both sides of the KKT solve so physics/optimization callers
-    /// can inspect constraint forces or sensitivities later.
     template<FloatingPoint T>
-    struct EqualityConstrainedQPResult final
+    struct ConjugateGradientResult final
     {
-        std::vector<T> Primal;
-        std::vector<T> Multipliers;
-        T ObjectiveValue = T(0);
-        T KKTResidualNorm = T(0);
+        DynamicMatrix<T> X;
+
+        T ResidualNorm = T(0);
+
+        std::size_t Iterations = 0;
+
+        bool Converged = false;
+
+        std::string Message;
     };
+
+    //=========================================================
+    // Internal Helpers
+    //=========================================================
 
     namespace optimization_detail
     {
         template<FloatingPoint T>
-        void RequireSameSize(
-            const std::vector<T>& lhs,
-            const std::vector<T>& rhs,
-            const char* message)
+        void RequireColumnVector(
+            const DynamicMatrix<T>& vector,
+            const char* name)
         {
-            if (lhs.size() != rhs.size())
+            if (vector.Columns() != 1)
             {
-                throw std::invalid_argument(message);
+                throw std::invalid_argument(
+                    std::string(name) + " must be a column vector.");
+            }
+        }
+
+        template<FloatingPoint T>
+        void RequireSameShape(
+            const DynamicMatrix<T>& lhs,
+            const DynamicMatrix<T>& rhs,
+            const char* operation)
+        {
+            if (lhs.Rows() != rhs.Rows() ||
+                lhs.Columns() != rhs.Columns())
+            {
+                throw std::invalid_argument(
+                    std::string(operation) + " failed: matrix shape mismatch.");
             }
         }
 
         template<FloatingPoint T>
         [[nodiscard]]
-        T DotVector(
-            const std::vector<T>& lhs,
-            const std::vector<T>& rhs)
+        DynamicMatrix<T> ZeroLike(
+            const DynamicMatrix<T>& matrix)
         {
-            RequireSameSize(lhs, rhs, "Vector dot product failed: sizes must match.");
+            return DynamicMatrix<T>(
+                matrix.Rows(),
+                matrix.Columns(),
+                T(0));
+        }
+
+        template<FloatingPoint T>
+        [[nodiscard]]
+        T DotColumn(
+            const DynamicMatrix<T>& lhs,
+            const DynamicMatrix<T>& rhs)
+        {
+            RequireColumnVector(lhs, "lhs");
+            RequireColumnVector(rhs, "rhs");
+            RequireSameShape(lhs, rhs, "DotColumn");
 
             T sum = T(0);
-            for (std::size_t i = 0; i < lhs.size(); ++i)
+
+            for (std::size_t i = 0; i < lhs.Rows(); ++i)
             {
-                sum += lhs[i] * rhs[i];
+                sum += lhs(i, 0) * rhs(i, 0);
             }
 
             return sum;
@@ -109,1172 +141,1383 @@ export namespace kairo::foundation::math
 
         template<FloatingPoint T>
         [[nodiscard]]
-        T Norm(
-            const std::vector<T>& values)
+        T NormSquared(
+            const DynamicMatrix<T>& vector)
         {
-            return std::sqrt(DotVector(values, values));
+            return DotColumn(
+                vector,
+                vector);
         }
 
         template<FloatingPoint T>
         [[nodiscard]]
-        std::vector<T> AddScaled(
-            const std::vector<T>& lhs,
-            const std::vector<T>& rhs,
+        T Norm(
+            const DynamicMatrix<T>& vector)
+        {
+            return std::sqrt(
+                NormSquared(vector));
+        }
+
+        template<FloatingPoint T>
+        [[nodiscard]]
+        DynamicMatrix<T> Negative(
+            DynamicMatrix<T> vector)
+        {
+            for (std::size_t i = 0; i < vector.Size(); ++i)
+            {
+                vector[i] = -vector[i];
+            }
+
+            return vector;
+        }
+
+        template<FloatingPoint T>
+        [[nodiscard]]
+        DynamicMatrix<T> AddScaled(
+            DynamicMatrix<T> lhs,
+            const DynamicMatrix<T>& direction,
             T scale)
         {
-            RequireSameSize(lhs, rhs, "Vector scaled addition failed: sizes must match.");
+            RequireSameShape(
+                lhs,
+                direction,
+                "AddScaled");
 
-            std::vector<T> result(lhs.size());
-            for (std::size_t i = 0; i < lhs.size(); ++i)
+            for (std::size_t i = 0; i < lhs.Size(); ++i)
             {
-                result[i] = lhs[i] + (rhs[i] * scale);
+                lhs[i] += direction[i] * scale;
             }
 
-            return result;
+            return lhs;
         }
 
         template<FloatingPoint T>
         [[nodiscard]]
-        std::vector<T> Subtract(
-            const std::vector<T>& lhs,
-            const std::vector<T>& rhs)
+        bool IsFinite(
+            const DynamicMatrix<T>& matrix)
         {
-            return AddScaled(lhs, rhs, T(-1));
-        }
-
-        template<FloatingPoint T>
-        [[nodiscard]]
-        std::vector<T> MatrixVector(
-            const DynamicMatrix<T>& matrix,
-            const std::vector<T>& vector)
-        {
-            if (matrix.Columns() != vector.size())
+            for (std::size_t i = 0; i < matrix.Size(); ++i)
             {
-                throw std::invalid_argument("Matrix-vector multiply failed: matrix columns must match vector size.");
-            }
-
-            std::vector<T> result(matrix.Rows(), T(0));
-            for (std::size_t row = 0; row < matrix.Rows(); ++row)
-            {
-                for (std::size_t col = 0; col < matrix.Columns(); ++col)
+                if (!std::isfinite(matrix[i]))
                 {
-                    result[row] += matrix(row, col) * vector[col];
+                    return false;
                 }
             }
 
+            return true;
+        }
+
+        template<FloatingPoint T>
+        [[nodiscard]]
+        DynamicMatrix<T> HadamardSquare(
+            const DynamicMatrix<T>& matrix)
+        {
+            DynamicMatrix<T> result(
+                matrix.Rows(),
+                matrix.Columns());
+
+            for (std::size_t i = 0; i < matrix.Size(); ++i)
+            {
+                result[i] = matrix[i] * matrix[i];
+            }
+
             return result;
         }
 
         template<FloatingPoint T>
         [[nodiscard]]
-        std::vector<T> TransposeMatrixVector(
-            const DynamicMatrix<T>& matrix,
-            const std::vector<T>& vector)
+        DynamicMatrix<T> ElementwiseSqrt(
+            const DynamicMatrix<T>& matrix)
         {
-            if (matrix.Rows() != vector.size())
+            DynamicMatrix<T> result(
+                matrix.Rows(),
+                matrix.Columns());
+
+            for (std::size_t i = 0; i < matrix.Size(); ++i)
             {
-                throw std::invalid_argument("Transpose matrix-vector multiply failed: matrix rows must match vector size.");
+                result[i] = std::sqrt(matrix[i]);
             }
 
-            std::vector<T> result(matrix.Columns(), T(0));
-            for (std::size_t row = 0; row < matrix.Rows(); ++row)
+            return result;
+        }
+
+        template<FloatingPoint T>
+        [[nodiscard]]
+        DynamicMatrix<T> ElementwiseDivide(
+            const DynamicMatrix<T>& numerator,
+            const DynamicMatrix<T>& denominator,
+            T epsilon)
+        {
+            RequireSameShape(
+                numerator,
+                denominator,
+                "ElementwiseDivide");
+
+            DynamicMatrix<T> result(
+                numerator.Rows(),
+                numerator.Columns());
+
+            for (std::size_t i = 0; i < numerator.Size(); ++i)
             {
-                for (std::size_t col = 0; col < matrix.Columns(); ++col)
+                result[i] =
+                    numerator[i] /
+                    (denominator[i] + epsilon);
+            }
+
+            return result;
+        }
+
+        template<FloatingPoint T>
+        [[nodiscard]]
+        DynamicMatrix<T> ColumnFromStdVector(
+            const std::vector<T>& values)
+        {
+            DynamicMatrix<T> result(
+                values.size(),
+                1);
+
+            for (std::size_t i = 0; i < values.size(); ++i)
+            {
+                result(i, 0) = values[i];
+            }
+
+            return result;
+        }
+
+        template<FloatingPoint T>
+        [[nodiscard]]
+        std::vector<T> ToStdVector(
+            const DynamicMatrix<T>& column)
+        {
+            RequireColumnVector(
+                column,
+                "column");
+
+            std::vector<T> result(
+                column.Rows());
+
+            for (std::size_t i = 0; i < column.Rows(); ++i)
+            {
+                result[i] = column(i, 0);
+            }
+
+            return result;
+        }
+
+        template<FloatingPoint T, typename Objective>
+        [[nodiscard]]
+        T BacktrackingLineSearch(
+            Objective&& objective,
+            const DynamicMatrix<T>& x,
+            const DynamicMatrix<T>& direction,
+            const DynamicMatrix<T>& gradient,
+            T currentValue,
+            const OptimizationSettings<T>& settings)
+        {
+            T stepScale =
+                T(1);
+
+            const T directionalDerivative =
+                DotColumn(
+                    gradient,
+                    direction);
+
+            while (stepScale >= settings.MinimumStepScale)
+            {
+                const DynamicMatrix<T> candidate =
+                    AddScaled(
+                        x,
+                        direction,
+                        stepScale);
+
+                const T candidateValue =
+                    objective(candidate);
+
+                if (std::isfinite(candidateValue) &&
+                    candidateValue <=
+                        currentValue +
+                        settings.ArmijoC1 *
+                        stepScale *
+                        directionalDerivative)
                 {
-                    result[col] += matrix(row, col) * vector[row];
+                    return stepScale;
                 }
+
+                stepScale *=
+                    settings.BacktrackingShrink;
             }
 
-            return result;
+            return T(0);
         }
 
         template<FloatingPoint T>
         [[nodiscard]]
-        DynamicMatrix<T> OuterProduct(
-            const DynamicMatrix<T>& lhs,
-            const DynamicMatrix<T>& rhs)
+        T LeastSquaresValue(
+            const DynamicMatrix<T>& residual)
         {
-            return lhs.Transpose() * rhs;
+            RequireColumnVector(
+                residual,
+                "residual");
+
+            return
+                T(0.5) *
+                NormSquared(residual);
         }
 
         template<FloatingPoint T>
         [[nodiscard]]
-        T QuadraticObjectiveValue(
-            const DynamicMatrix<T>& H,
-            const std::vector<T>& g,
-            const std::vector<T>& x)
+        DynamicMatrix<T> NormalEquationsGradient(
+            const DynamicMatrix<T>& jacobian,
+            const DynamicMatrix<T>& residual)
         {
-            const std::vector<T> Hx =
-                MatrixVector(H, x);
-
-            return (T(0.5) * DotVector(x, Hx)) +
-                DotVector(g, x);
+            return
+                jacobian.Transpose() *
+                residual;
         }
     }
 
-    /// Input: objective `f(x)`, gradient `grad(x)`, initial point, and options.
-    /// Output: iterative minimization result.
-    /// Task: provide the simplest first-order optimizer for smooth objectives.
-    /// Invalid gradient dimensions are runtime input errors and throw.
+    //=========================================================
+    // Gradient Descent
+    //=========================================================
+
     template<FloatingPoint T, typename Objective, typename Gradient>
     [[nodiscard]]
     OptimizationResult<T> GradientDescent(
-        Objective objective,
-        Gradient gradient,
-        std::vector<T> initial,
-        OptimizationOptions<T> options = {})
+        Objective&& objective,
+        Gradient&& gradient,
+        DynamicMatrix<T> initialX,
+        OptimizationSettings<T> settings = {})
     {
-        std::vector<T> x =
-            std::move(initial);
+        optimization_detail::RequireColumnVector(
+            initialX,
+            "initialX");
+
+        DynamicMatrix<T> x =
+            std::move(initialX);
+
+        T value =
+            objective(x);
 
         OptimizationResult<T> result;
-        result.Position = x;
+        result.X = x;
+        result.Value = value;
 
-        for (std::size_t iteration = 0; iteration < options.MaxIterations; ++iteration)
+        for (std::size_t iteration = 0;
+             iteration < settings.MaxIterations;
+             ++iteration)
         {
-            const std::vector<T> grad =
+            const DynamicMatrix<T> g =
                 gradient(x);
 
-            optimization_detail::RequireSameSize(
+            optimization_detail::RequireSameShape(
                 x,
-                grad,
-                "GradientDescent failed: gradient size must match position size.");
+                g,
+                "GradientDescent");
 
             const T gradientNorm =
-                optimization_detail::Norm(grad);
+                optimization_detail::Norm(g);
 
-            result.Iterations = iteration;
-            result.GradientNorm = gradientNorm;
-            if (gradientNorm <= options.GradientTolerance)
+            if (gradientNorm <= settings.GradientTolerance)
             {
-                result.Converged = true;
-                break;
+                result =
+                {
+                    x,
+                    value,
+                    gradientNorm,
+                    T(0),
+                    iteration,
+                    true,
+                    "GradientDescent converged: gradient norm below tolerance."
+                };
+
+                return result;
             }
 
-            const std::vector<T> next =
+            const DynamicMatrix<T> direction =
+                optimization_detail::Negative(g);
+
+            T stepScale =
+                settings.LearningRate;
+
+            if (settings.UseLineSearch)
+            {
+                stepScale *=
+                    optimization_detail::BacktrackingLineSearch(
+                        objective,
+                        x,
+                        direction,
+                        g,
+                        value,
+                        settings);
+            }
+
+            const DynamicMatrix<T> nextX =
                 optimization_detail::AddScaled(
                     x,
-                    grad,
-                    -options.LearningRate);
+                    direction,
+                    stepScale);
+
+            if (!optimization_detail::IsFinite(nextX))
+            {
+                result =
+                {
+                    x,
+                    value,
+                    gradientNorm,
+                    T(0),
+                    iteration,
+                    false,
+                    "GradientDescent stopped: non-finite iterate."
+                };
+
+                return result;
+            }
+
+            const T nextValue =
+                objective(nextX);
 
             const T stepNorm =
                 optimization_detail::Norm(
-                    optimization_detail::Subtract(next, x));
+                    nextX - x);
 
-            x = next;
-            result.Position = x;
-            result.Value = objective(x);
-            result.Iterations = iteration + 1;
+            const T valueChange =
+                std::abs(nextValue - value);
 
-            if (stepNorm <= options.StepTolerance)
+            x =
+                nextX;
+
+            value =
+                nextValue;
+
+            if (stepNorm <= settings.StepTolerance ||
+                valueChange <= settings.ValueTolerance)
             {
-                result.Converged = true;
-                break;
+                result =
+                {
+                    x,
+                    value,
+                    gradientNorm,
+                    stepNorm,
+                    iteration + 1,
+                    true,
+                    "GradientDescent converged: step/value tolerance reached."
+                };
+
+                return result;
             }
         }
 
-        result.Position = x;
-        result.Value = objective(x);
-        result.GradientNorm =
-            optimization_detail::Norm(gradient(x));
+        result =
+        {
+            x,
+            value,
+            optimization_detail::Norm(gradient(x)),
+            T(0),
+            settings.MaxIterations,
+            false,
+            "GradientDescent stopped: maximum iterations reached."
+        };
+
         return result;
     }
 
-    /// Input: objective, gradient, initial point, and momentum options.
-    /// Output: iterative minimization result.
-    /// Task: accelerate gradient descent by accumulating an exponential moving
-    /// direction. `Beta1` is the momentum coefficient.
+    //=========================================================
+    // Momentum Gradient Descent
+    //=========================================================
+
     template<FloatingPoint T, typename Objective, typename Gradient>
     [[nodiscard]]
     OptimizationResult<T> Momentum(
-        Objective objective,
-        Gradient gradient,
-        std::vector<T> initial,
-        OptimizationOptions<T> options = {})
+        Objective&& objective,
+        Gradient&& gradient,
+        DynamicMatrix<T> initialX,
+        T beta = T(0.9),
+        OptimizationSettings<T> settings = {})
     {
-        std::vector<T> x =
-            std::move(initial);
+        optimization_detail::RequireColumnVector(
+            initialX,
+            "initialX");
 
-        std::vector<T> velocity(x.size(), T(0));
-        OptimizationResult<T> result;
+        DynamicMatrix<T> x =
+            std::move(initialX);
 
-        for (std::size_t iteration = 0; iteration < options.MaxIterations; ++iteration)
+        DynamicMatrix<T> velocity =
+            optimization_detail::ZeroLike(x);
+
+        T value =
+            objective(x);
+
+        for (std::size_t iteration = 0;
+             iteration < settings.MaxIterations;
+             ++iteration)
         {
-            const std::vector<T> grad =
+            const DynamicMatrix<T> g =
                 gradient(x);
 
-            optimization_detail::RequireSameSize(
+            optimization_detail::RequireSameShape(
                 x,
-                grad,
-                "Momentum failed: gradient size must match position size.");
+                g,
+                "Momentum");
 
             const T gradientNorm =
-                optimization_detail::Norm(grad);
+                optimization_detail::Norm(g);
 
-            if (gradientNorm <= options.GradientTolerance)
+            if (gradientNorm <= settings.GradientTolerance)
             {
-                result.Converged = true;
-                result.Iterations = iteration;
-                break;
+                return
+                {
+                    x,
+                    value,
+                    gradientNorm,
+                    T(0),
+                    iteration,
+                    true,
+                    "Momentum converged: gradient norm below tolerance."
+                };
             }
 
-            for (std::size_t i = 0; i < x.size(); ++i)
-            {
-                velocity[i] = (options.Beta1 * velocity[i]) -
-                    (options.LearningRate * grad[i]);
-                x[i] += velocity[i];
-            }
+            velocity =
+                velocity * beta -
+                g * settings.LearningRate;
 
-            result.Iterations = iteration + 1;
-            if (optimization_detail::Norm(velocity) <= options.StepTolerance)
+            const DynamicMatrix<T> nextX =
+                x + velocity;
+
+            const T nextValue =
+                objective(nextX);
+
+            const T stepNorm =
+                optimization_detail::Norm(
+                    nextX - x);
+
+            const T valueChange =
+                std::abs(nextValue - value);
+
+            x =
+                nextX;
+
+            value =
+                nextValue;
+
+            if (stepNorm <= settings.StepTolerance ||
+                valueChange <= settings.ValueTolerance)
             {
-                result.Converged = true;
-                break;
+                return
+                {
+                    x,
+                    value,
+                    gradientNorm,
+                    stepNorm,
+                    iteration + 1,
+                    true,
+                    "Momentum converged: step/value tolerance reached."
+                };
             }
         }
 
-        result.Position = x;
-        result.Value = objective(x);
-        result.GradientNorm =
-            optimization_detail::Norm(gradient(x));
-        return result;
+        return
+        {
+            x,
+            value,
+            optimization_detail::Norm(gradient(x)),
+            T(0),
+            settings.MaxIterations,
+            false,
+            "Momentum stopped: maximum iterations reached."
+        };
     }
 
-    /// Input: objective, gradient, initial point, and Nesterov options.
-    /// Output: iterative minimization result.
-    /// Task: evaluate the gradient at the lookahead position to reduce lag in
-    /// the accumulated momentum direction.
+    //=========================================================
+    // Nesterov Accelerated Gradient
+    //=========================================================
+
     template<FloatingPoint T, typename Objective, typename Gradient>
     [[nodiscard]]
     OptimizationResult<T> Nesterov(
-        Objective objective,
-        Gradient gradient,
-        std::vector<T> initial,
-        OptimizationOptions<T> options = {})
+        Objective&& objective,
+        Gradient&& gradient,
+        DynamicMatrix<T> initialX,
+        T beta = T(0.9),
+        OptimizationSettings<T> settings = {})
     {
-        std::vector<T> x =
-            std::move(initial);
+        optimization_detail::RequireColumnVector(
+            initialX,
+            "initialX");
 
-        std::vector<T> velocity(x.size(), T(0));
-        OptimizationResult<T> result;
+        DynamicMatrix<T> x =
+            std::move(initialX);
 
-        for (std::size_t iteration = 0; iteration < options.MaxIterations; ++iteration)
+        DynamicMatrix<T> velocity =
+            optimization_detail::ZeroLike(x);
+
+        T value =
+            objective(x);
+
+        for (std::size_t iteration = 0;
+             iteration < settings.MaxIterations;
+             ++iteration)
         {
-            const std::vector<T> lookahead =
-                optimization_detail::AddScaled(
-                    x,
-                    velocity,
-                    options.Beta1);
+            const DynamicMatrix<T> lookahead =
+                x + velocity * beta;
 
-            const std::vector<T> grad =
+            const DynamicMatrix<T> g =
                 gradient(lookahead);
 
-            optimization_detail::RequireSameSize(
+            optimization_detail::RequireSameShape(
                 x,
-                grad,
-                "Nesterov failed: gradient size must match position size.");
+                g,
+                "Nesterov");
 
             const T gradientNorm =
-                optimization_detail::Norm(grad);
+                optimization_detail::Norm(g);
 
-            if (gradientNorm <= options.GradientTolerance)
+            if (gradientNorm <= settings.GradientTolerance)
             {
-                result.Converged = true;
-                result.Iterations = iteration;
-                break;
+                return
+                {
+                    x,
+                    value,
+                    gradientNorm,
+                    T(0),
+                    iteration,
+                    true,
+                    "Nesterov converged: gradient norm below tolerance."
+                };
             }
 
-            for (std::size_t i = 0; i < x.size(); ++i)
-            {
-                velocity[i] = (options.Beta1 * velocity[i]) -
-                    (options.LearningRate * grad[i]);
-                x[i] += velocity[i];
-            }
+            velocity =
+                velocity * beta -
+                g * settings.LearningRate;
 
-            result.Iterations = iteration + 1;
-            if (optimization_detail::Norm(velocity) <= options.StepTolerance)
+            const DynamicMatrix<T> nextX =
+                x + velocity;
+
+            const T nextValue =
+                objective(nextX);
+
+            const T stepNorm =
+                optimization_detail::Norm(
+                    nextX - x);
+
+            const T valueChange =
+                std::abs(nextValue - value);
+
+            x =
+                nextX;
+
+            value =
+                nextValue;
+
+            if (stepNorm <= settings.StepTolerance ||
+                valueChange <= settings.ValueTolerance)
             {
-                result.Converged = true;
-                break;
+                return
+                {
+                    x,
+                    value,
+                    gradientNorm,
+                    stepNorm,
+                    iteration + 1,
+                    true,
+                    "Nesterov converged: step/value tolerance reached."
+                };
             }
         }
 
-        result.Position = x;
-        result.Value = objective(x);
-        result.GradientNorm =
-            optimization_detail::Norm(gradient(x));
-        return result;
+        return
+        {
+            x,
+            value,
+            optimization_detail::Norm(gradient(x)),
+            T(0),
+            settings.MaxIterations,
+            false,
+            "Nesterov stopped: maximum iterations reached."
+        };
     }
 
-    /// Input: objective, gradient, initial point, and Adam options.
-    /// Output: iterative minimization result.
-    /// Task: provide an adaptive first-order optimizer with bias-corrected first
-    /// and second gradient moments.
+    //=========================================================
+    // Adam
+    //=========================================================
+
     template<FloatingPoint T, typename Objective, typename Gradient>
     [[nodiscard]]
     OptimizationResult<T> Adam(
-        Objective objective,
-        Gradient gradient,
-        std::vector<T> initial,
-        OptimizationOptions<T> options = {})
+        Objective&& objective,
+        Gradient&& gradient,
+        DynamicMatrix<T> initialX,
+        T beta1 = T(0.9),
+        T beta2 = T(0.999),
+        T epsilon = T(1e-8),
+        OptimizationSettings<T> settings = {})
     {
-        std::vector<T> x =
-            std::move(initial);
+        optimization_detail::RequireColumnVector(
+            initialX,
+            "initialX");
 
-        std::vector<T> m(x.size(), T(0));
-        std::vector<T> v(x.size(), T(0));
-        OptimizationResult<T> result;
+        DynamicMatrix<T> x =
+            std::move(initialX);
 
-        for (std::size_t iteration = 0; iteration < options.MaxIterations; ++iteration)
+        DynamicMatrix<T> m =
+            optimization_detail::ZeroLike(x);
+
+        DynamicMatrix<T> v =
+            optimization_detail::ZeroLike(x);
+
+        T value =
+            objective(x);
+
+        T beta1Power =
+            T(1);
+
+        T beta2Power =
+            T(1);
+
+        for (std::size_t iteration = 0;
+             iteration < settings.MaxIterations;
+             ++iteration)
         {
-            const std::vector<T> grad =
+            const DynamicMatrix<T> g =
                 gradient(x);
 
-            optimization_detail::RequireSameSize(
+            optimization_detail::RequireSameShape(
                 x,
-                grad,
-                "Adam failed: gradient size must match position size.");
+                g,
+                "Adam");
 
             const T gradientNorm =
-                optimization_detail::Norm(grad);
+                optimization_detail::Norm(g);
 
-            if (gradientNorm <= options.GradientTolerance)
+            if (gradientNorm <= settings.GradientTolerance)
             {
-                result.Converged = true;
-                result.Iterations = iteration;
-                break;
+                return
+                {
+                    x,
+                    value,
+                    gradientNorm,
+                    T(0),
+                    iteration,
+                    true,
+                    "Adam converged: gradient norm below tolerance."
+                };
             }
 
-            const T beta1Correction =
-                T(1) - std::pow(options.Beta1, static_cast<T>(iteration + 1));
+            beta1Power *=
+                beta1;
 
-            const T beta2Correction =
-                T(1) - std::pow(options.Beta2, static_cast<T>(iteration + 1));
+            beta2Power *=
+                beta2;
 
-            std::vector<T> step(x.size(), T(0));
-            for (std::size_t i = 0; i < x.size(); ++i)
-            {
-                m[i] = (options.Beta1 * m[i]) +
-                    ((T(1) - options.Beta1) * grad[i]);
+            m =
+                m * beta1 +
+                g * (T(1) - beta1);
 
-                v[i] = (options.Beta2 * v[i]) +
-                    ((T(1) - options.Beta2) * grad[i] * grad[i]);
+            v =
+                v * beta2 +
+                optimization_detail::HadamardSquare(g) *
+                (T(1) - beta2);
 
-                const T mHat =
-                    m[i] / beta1Correction;
+            DynamicMatrix<T> mHat =
+                m / (T(1) - beta1Power);
 
-                const T vHat =
-                    v[i] / beta2Correction;
+            DynamicMatrix<T> vHat =
+                v / (T(1) - beta2Power);
 
-                step[i] =
-                    -options.LearningRate * mHat /
-                    (std::sqrt(vHat) + options.Epsilon);
+            const DynamicMatrix<T> step =
+                optimization_detail::ElementwiseDivide(
+                    mHat,
+                    optimization_detail::ElementwiseSqrt(vHat),
+                    epsilon)
+                * settings.LearningRate;
 
-                x[i] += step[i];
-            }
+            const DynamicMatrix<T> nextX =
+                x - step;
 
-            result.Iterations = iteration + 1;
-            if (optimization_detail::Norm(step) <= options.StepTolerance)
-            {
-                result.Converged = true;
-                break;
-            }
-        }
+            const T nextValue =
+                objective(nextX);
 
-        result.Position = x;
-        result.Value = objective(x);
-        result.GradientNorm =
-            optimization_detail::Norm(gradient(x));
-        return result;
-    }
+            const T stepNorm =
+                optimization_detail::Norm(step);
 
-    /// Input: objective, gradient, Hessian, initial point, and options.
-    /// Output: Newton minimization result.
-    /// Task: solve `H(x) step = grad(x)` and subtract the step. This is for
-    /// smooth problems where callers can provide a well-conditioned Hessian.
-    template<FloatingPoint T, typename Objective, typename Gradient, typename Hessian>
-    [[nodiscard]]
-    OptimizationResult<T> Newton(
-        Objective objective,
-        Gradient gradient,
-        Hessian hessian,
-        std::vector<T> initial,
-        OptimizationOptions<T> options = {})
-    {
-        std::vector<T> x =
-            std::move(initial);
-
-        OptimizationResult<T> result;
-
-        for (std::size_t iteration = 0; iteration < options.MaxIterations; ++iteration)
-        {
-            const std::vector<T> grad =
-                gradient(x);
-
-            optimization_detail::RequireSameSize(
-                x,
-                grad,
-                "Newton failed: gradient size must match position size.");
-
-            const T gradientNorm =
-                optimization_detail::Norm(grad);
-
-            if (gradientNorm <= options.GradientTolerance)
-            {
-                result.Converged = true;
-                result.Iterations = iteration;
-                break;
-            }
-
-            DynamicMatrix<T> H =
-                hessian(x);
-
-            if (H.Rows() != x.size() || H.Columns() != x.size())
-            {
-                throw std::invalid_argument("Newton failed: Hessian must be square with one row per variable.");
-            }
-
-            const std::vector<T> step =
-                LinearSolve(H, grad);
+            const T valueChange =
+                std::abs(nextValue - value);
 
             x =
-                optimization_detail::AddScaled(
-                    x,
-                    step,
-                    T(-1));
+                nextX;
 
-            result.Iterations = iteration + 1;
-            if (optimization_detail::Norm(step) <= options.StepTolerance)
+            value =
+                nextValue;
+
+            if (stepNorm <= settings.StepTolerance ||
+                valueChange <= settings.ValueTolerance)
             {
-                result.Converged = true;
-                break;
+                return
+                {
+                    x,
+                    value,
+                    gradientNorm,
+                    stepNorm,
+                    iteration + 1,
+                    true,
+                    "Adam converged: step/value tolerance reached."
+                };
             }
         }
 
-        result.Position = x;
-        result.Value = objective(x);
-        result.GradientNorm =
-            optimization_detail::Norm(gradient(x));
-        return result;
-    }
-
-    /// Input: residual function, Jacobian function, initial point, and options.
-    /// Output: least-squares minimization result.
-    /// Task: solve nonlinear least-squares through the normal equations
-    /// `(J^T J) step = -J^T r`. Residual count may differ from variable count.
-    template<FloatingPoint T, typename Residual, typename Jacobian>
-    [[nodiscard]]
-    OptimizationResult<T> GaussNewton(
-        Residual residual,
-        Jacobian jacobian,
-        std::vector<T> initial,
-        OptimizationOptions<T> options = {})
-    {
-        std::vector<T> x =
-            std::move(initial);
-
-        OptimizationResult<T> result;
-
-        for (std::size_t iteration = 0; iteration < options.MaxIterations; ++iteration)
+        return
         {
-            const std::vector<T> r =
-                residual(x);
-
-            const DynamicMatrix<T> J =
-                jacobian(x);
-
-            if (J.Rows() != r.size() || J.Columns() != x.size())
-            {
-                throw std::invalid_argument("GaussNewton failed: Jacobian shape must be residuals x variables.");
-            }
-
-            const DynamicMatrix<T> JTJ =
-                J.Transpose() * J;
-
-            const std::vector<T> gradient =
-                optimization_detail::TransposeMatrixVector(J, r);
-
-            const T gradientNorm =
-                optimization_detail::Norm(gradient);
-
-            if (gradientNorm <= options.GradientTolerance)
-            {
-                result.Converged = true;
-                result.Iterations = iteration;
-                break;
-            }
-
-            std::vector<T> rhs(gradient.size());
-            for (std::size_t i = 0; i < gradient.size(); ++i)
-            {
-                rhs[i] = -gradient[i];
-            }
-
-            const std::vector<T> step =
-                LinearSolve(JTJ, rhs);
-
-            x =
-                optimization_detail::AddScaled(
-                    x,
-                    step,
-                    T(1));
-
-            result.Iterations = iteration + 1;
-            if (optimization_detail::Norm(step) <= options.StepTolerance)
-            {
-                result.Converged = true;
-                break;
-            }
-        }
-
-        const std::vector<T> finalResidual =
-            residual(x);
-
-        result.Position = x;
-        result.Value =
-            T(0.5) * optimization_detail::DotVector(finalResidual, finalResidual);
-        result.GradientNorm =
-            optimization_detail::Norm(
-                optimization_detail::TransposeMatrixVector(
-                    jacobian(x),
-                    finalResidual));
-        return result;
+            x,
+            value,
+            optimization_detail::Norm(gradient(x)),
+            T(0),
+            settings.MaxIterations,
+            false,
+            "Adam stopped: maximum iterations reached."
+        };
     }
 
-    /// Input: residual function, Jacobian function, initial point, and damping options.
-    /// Output: damped least-squares minimization result.
-    /// Task: blend Gauss-Newton with gradient descent behavior by solving
-    /// `(J^T J + lambda I) step = -J^T r`. This is safer for ill-conditioned
-    /// residual problems than a pure normal-equation step.
-    template<FloatingPoint T, typename Residual, typename Jacobian>
-    [[nodiscard]]
-    OptimizationResult<T> LevenbergMarquardt(
-        Residual residual,
-        Jacobian jacobian,
-        std::vector<T> initial,
-        OptimizationOptions<T> options = {})
-    {
-        std::vector<T> x =
-            std::move(initial);
+    //=========================================================
+    // Conjugate Gradient for SPD Linear Systems
+    //
+    // Solves:
+    //     A * x = b
+    //
+    // Assumes:
+    //     A is symmetric positive definite.
+    //=========================================================
 
-        T damping =
-            options.Damping;
-
-        OptimizationResult<T> result;
-
-        auto objectiveFromResidual =
-            [](const std::vector<T>& r) -> T
-            {
-                return T(0.5) * optimization_detail::DotVector(r, r);
-            };
-
-        for (std::size_t iteration = 0; iteration < options.MaxIterations; ++iteration)
-        {
-            const std::vector<T> r =
-                residual(x);
-
-            const DynamicMatrix<T> J =
-                jacobian(x);
-
-            if (J.Rows() != r.size() || J.Columns() != x.size())
-            {
-                throw std::invalid_argument("LevenbergMarquardt failed: Jacobian shape must be residuals x variables.");
-            }
-
-            DynamicMatrix<T> system =
-                J.Transpose() * J;
-
-            const std::vector<T> gradient =
-                optimization_detail::TransposeMatrixVector(J, r);
-
-            const T gradientNorm =
-                optimization_detail::Norm(gradient);
-
-            if (gradientNorm <= options.GradientTolerance)
-            {
-                result.Converged = true;
-                result.Iterations = iteration;
-                break;
-            }
-
-            for (std::size_t diagonal = 0; diagonal < system.Rows(); ++diagonal)
-            {
-                system(diagonal, diagonal) += damping;
-            }
-
-            std::vector<T> rhs(gradient.size());
-            for (std::size_t i = 0; i < gradient.size(); ++i)
-            {
-                rhs[i] = -gradient[i];
-            }
-
-            const std::vector<T> step =
-                LinearSolve(system, rhs);
-
-            const std::vector<T> candidate =
-                optimization_detail::AddScaled(
-                    x,
-                    step,
-                    T(1));
-
-            if (objectiveFromResidual(residual(candidate)) <= objectiveFromResidual(r))
-            {
-                x = candidate;
-                damping = std::max(damping * T(0.5), std::numeric_limits<T>::epsilon());
-            }
-            else
-            {
-                damping *= T(2);
-            }
-
-            result.Iterations = iteration + 1;
-            if (optimization_detail::Norm(step) <= options.StepTolerance)
-            {
-                result.Converged = true;
-                break;
-            }
-        }
-
-        const std::vector<T> finalResidual =
-            residual(x);
-
-        result.Position = x;
-        result.Value =
-            T(0.5) * optimization_detail::DotVector(finalResidual, finalResidual);
-        result.GradientNorm =
-            optimization_detail::Norm(
-                optimization_detail::TransposeMatrixVector(
-                    jacobian(x),
-                    finalResidual));
-        return result;
-    }
-
-    /// Input: square system matrix, right-hand side, optional initial guess, and options.
-    /// Output: approximate solution of `A x = b`.
-    /// Task: solve symmetric positive-definite systems without forming a
-    /// decomposition. This is the sparse-friendly baseline used by physics and
-    /// simulation systems.
     template<FloatingPoint T>
     [[nodiscard]]
-    IterativeSolveResult<T> ConjugateGradient(
+    ConjugateGradientResult<T> ConjugateGradientSolve(
         const DynamicMatrix<T>& A,
-        const std::vector<T>& b,
-        std::vector<T> initial = {},
-        OptimizationOptions<T> options = {})
+        const DynamicMatrix<T>& b,
+        DynamicMatrix<T> initialX,
+        OptimizationSettings<T> settings = {})
     {
         if (A.Rows() != A.Columns())
         {
-            throw std::invalid_argument("ConjugateGradient failed: matrix must be square.");
-        }
-        if (A.Rows() != b.size())
-        {
-            throw std::invalid_argument("ConjugateGradient failed: matrix rows must match b size.");
+            throw std::invalid_argument(
+                "ConjugateGradientSolve failed: A must be square.");
         }
 
-        std::vector<T> x =
-            initial.empty()
-                ? std::vector<T>(b.size(), T(0))
-                : std::move(initial);
-
-        optimization_detail::RequireSameSize(
-            x,
+        optimization_detail::RequireColumnVector(
             b,
-            "ConjugateGradient failed: initial guess size must match b size.");
+            "b");
 
-        std::vector<T> r =
-            optimization_detail::Subtract(
-                b,
-                optimization_detail::MatrixVector(A, x));
+        optimization_detail::RequireColumnVector(
+            initialX,
+            "initialX");
 
-        std::vector<T> p =
+        if (A.Rows() != b.Rows() ||
+            initialX.Rows() != b.Rows())
+        {
+            throw std::invalid_argument(
+                "ConjugateGradientSolve failed: dimension mismatch.");
+        }
+
+        DynamicMatrix<T> x =
+            std::move(initialX);
+
+        DynamicMatrix<T> r =
+            b - A * x;
+
+        DynamicMatrix<T> p =
             r;
 
         T rsOld =
-            optimization_detail::DotVector(r, r);
+            optimization_detail::DotColumn(
+                r,
+                r);
 
-        IterativeSolveResult<T> result;
-        for (std::size_t iteration = 0; iteration < options.MaxIterations; ++iteration)
+        const T initialResidual =
+            std::sqrt(rsOld);
+
+        if (initialResidual <= settings.GradientTolerance)
         {
-            const std::vector<T> Ap =
-                optimization_detail::MatrixVector(A, p);
+            return
+            {
+                x,
+                initialResidual,
+                0,
+                true,
+                "ConjugateGradientSolve converged: initial residual below tolerance."
+            };
+        }
+
+        for (std::size_t iteration = 0;
+             iteration < settings.MaxIterations;
+             ++iteration)
+        {
+            const DynamicMatrix<T> Ap =
+                A * p;
 
             const T denominator =
-                optimization_detail::DotVector(p, Ap);
+                optimization_detail::DotColumn(
+                    p,
+                    Ap);
 
-            if (std::abs(denominator) <= std::numeric_limits<T>::epsilon())
+            if (std::abs(denominator) <=
+                std::numeric_limits<T>::epsilon())
             {
-                throw std::runtime_error("ConjugateGradient failed: search direction became singular.");
+                return
+                {
+                    x,
+                    std::sqrt(rsOld),
+                    iteration,
+                    false,
+                    "ConjugateGradientSolve stopped: near-zero denominator."
+                };
             }
 
             const T alpha =
                 rsOld / denominator;
 
             x =
-                optimization_detail::AddScaled(
-                    x,
-                    p,
-                    alpha);
+                x + p * alpha;
 
             r =
-                optimization_detail::AddScaled(
-                    r,
-                    Ap,
-                    -alpha);
-
-            const T residualNorm =
-                optimization_detail::Norm(r);
-
-            result.Iterations = iteration + 1;
-            result.ResidualNorm = residualNorm;
-            if (residualNorm <= options.GradientTolerance)
-            {
-                result.Converged = true;
-                break;
-            }
+                r - Ap * alpha;
 
             const T rsNew =
-                optimization_detail::DotVector(r, r);
+                optimization_detail::DotColumn(
+                    r,
+                    r);
+
+            const T residualNorm =
+                std::sqrt(rsNew);
+
+            if (residualNorm <= settings.GradientTolerance)
+            {
+                return
+                {
+                    x,
+                    residualNorm,
+                    iteration + 1,
+                    true,
+                    "ConjugateGradientSolve converged: residual below tolerance."
+                };
+            }
 
             const T beta =
                 rsNew / rsOld;
 
-            for (std::size_t i = 0; i < p.size(); ++i)
-            {
-                p[i] = r[i] + (beta * p[i]);
-            }
+            p =
+                r + p * beta;
 
-            rsOld = rsNew;
+            rsOld =
+                rsNew;
         }
 
-        result.Solution = x;
-        result.ResidualNorm =
-            optimization_detail::Norm(
-                optimization_detail::Subtract(
-                    b,
-                    optimization_detail::MatrixVector(A, x)));
-        return result;
+        return
+        {
+            x,
+            std::sqrt(rsOld),
+            settings.MaxIterations,
+            false,
+            "ConjugateGradientSolve stopped: maximum iterations reached."
+        };
     }
 
-    /// Input: square system, right-hand side, inverse diagonal preconditioner,
-    /// optional initial guess, and options.
-    /// Output: approximate solution of `A x = b`.
-    /// Task: provide a preconditioned CG path where callers can pass `M^-1` as
-    /// a vector. For Jacobi preconditioning, each entry is `1 / A(i,i)`.
     template<FloatingPoint T>
     [[nodiscard]]
-    IterativeSolveResult<T> PreconditionedConjugateGradient(
+    ConjugateGradientResult<T> ConjugateGradientSolve(
         const DynamicMatrix<T>& A,
-        const std::vector<T>& b,
-        const std::vector<T>& inversePreconditionerDiagonal,
-        std::vector<T> initial = {},
-        OptimizationOptions<T> options = {})
+        const DynamicMatrix<T>& b,
+        OptimizationSettings<T> settings = {})
     {
-        if (A.Rows() != A.Columns())
-        {
-            throw std::invalid_argument("PreconditionedConjugateGradient failed: matrix must be square.");
-        }
-        optimization_detail::RequireSameSize(
+        return ConjugateGradientSolve(
+            A,
             b,
-            inversePreconditionerDiagonal,
-            "PreconditionedConjugateGradient failed: preconditioner size must match b size.");
+            DynamicMatrix<T>(
+                b.Rows(),
+                1,
+                T(0)),
+            settings);
+    }
 
-        std::vector<T> x =
-            initial.empty()
-                ? std::vector<T>(b.size(), T(0))
-                : std::move(initial);
+    //=========================================================
+    // Newton Method
+    //=========================================================
 
-        optimization_detail::RequireSameSize(
-            x,
-            b,
-            "PreconditionedConjugateGradient failed: initial guess size must match b size.");
+    template<FloatingPoint T, typename Objective, typename Gradient, typename Hessian>
+    [[nodiscard]]
+    OptimizationResult<T> Newton(
+        Objective&& objective,
+        Gradient&& gradient,
+        Hessian&& hessian,
+        DynamicMatrix<T> initialX,
+        OptimizationSettings<T> settings = {})
+    {
+        optimization_detail::RequireColumnVector(
+            initialX,
+            "initialX");
 
-        std::vector<T> r =
-            optimization_detail::Subtract(
-                b,
-                optimization_detail::MatrixVector(A, x));
+        DynamicMatrix<T> x =
+            std::move(initialX);
 
-        std::vector<T> z(r.size());
-        for (std::size_t i = 0; i < r.size(); ++i)
+        T value =
+            objective(x);
+
+        for (std::size_t iteration = 0;
+             iteration < settings.MaxIterations;
+             ++iteration)
         {
-            z[i] = inversePreconditionerDiagonal[i] * r[i];
-        }
+            const DynamicMatrix<T> g =
+                gradient(x);
 
-        std::vector<T> p =
-            z;
+            optimization_detail::RequireSameShape(
+                x,
+                g,
+                "Newton");
 
-        T rzOld =
-            optimization_detail::DotVector(r, z);
+            const T gradientNorm =
+                optimization_detail::Norm(g);
 
-        IterativeSolveResult<T> result;
-        for (std::size_t iteration = 0; iteration < options.MaxIterations; ++iteration)
-        {
-            const std::vector<T> Ap =
-                optimization_detail::MatrixVector(A, p);
-
-            const T denominator =
-                optimization_detail::DotVector(p, Ap);
-
-            if (std::abs(denominator) <= std::numeric_limits<T>::epsilon())
+            if (gradientNorm <= settings.GradientTolerance)
             {
-                throw std::runtime_error("PreconditionedConjugateGradient failed: search direction became singular.");
+                return
+                {
+                    x,
+                    value,
+                    gradientNorm,
+                    T(0),
+                    iteration,
+                    true,
+                    "Newton converged: gradient norm below tolerance."
+                };
             }
 
-            const T alpha =
-                rzOld / denominator;
+            const DynamicMatrix<T> H =
+                hessian(x);
 
-            x =
+            if (H.Rows() != H.Columns() ||
+                H.Rows() != x.Rows())
+            {
+                throw std::invalid_argument(
+                    "Newton failed: Hessian must be square and match x dimension.");
+            }
+
+            const DynamicMatrix<T> rhs =
+                optimization_detail::Negative(g);
+
+            DynamicMatrix<T> direction =
+                LinearSolve(
+                    H,
+                    rhs);
+
+            T stepScale =
+                T(1);
+
+            if (settings.UseLineSearch)
+            {
+                stepScale =
+                    optimization_detail::BacktrackingLineSearch(
+                        objective,
+                        x,
+                        direction,
+                        g,
+                        value,
+                        settings);
+            }
+
+            const DynamicMatrix<T> nextX =
                 optimization_detail::AddScaled(
                     x,
-                    p,
-                    alpha);
+                    direction,
+                    stepScale);
 
-            r =
-                optimization_detail::AddScaled(
-                    r,
-                    Ap,
-                    -alpha);
+            const T nextValue =
+                objective(nextX);
 
-            const T residualNorm =
-                optimization_detail::Norm(r);
+            const T stepNorm =
+                optimization_detail::Norm(
+                    nextX - x);
 
-            result.Iterations = iteration + 1;
-            result.ResidualNorm = residualNorm;
-            if (residualNorm <= options.GradientTolerance)
+            const T valueChange =
+                std::abs(nextValue - value);
+
+            x =
+                nextX;
+
+            value =
+                nextValue;
+
+            if (stepNorm <= settings.StepTolerance ||
+                valueChange <= settings.ValueTolerance)
             {
-                result.Converged = true;
-                break;
+                return
+                {
+                    x,
+                    value,
+                    gradientNorm,
+                    stepNorm,
+                    iteration + 1,
+                    true,
+                    "Newton converged: step/value tolerance reached."
+                };
             }
-
-            for (std::size_t i = 0; i < r.size(); ++i)
-            {
-                z[i] = inversePreconditionerDiagonal[i] * r[i];
-            }
-
-            const T rzNew =
-                optimization_detail::DotVector(r, z);
-
-            const T beta =
-                rzNew / rzOld;
-
-            for (std::size_t i = 0; i < p.size(); ++i)
-            {
-                p[i] = z[i] + (beta * p[i]);
-            }
-
-            rzOld = rzNew;
         }
 
-        result.Solution = x;
-        result.ResidualNorm =
-            optimization_detail::Norm(
-                optimization_detail::Subtract(
-                    b,
-                    optimization_detail::MatrixVector(A, x)));
-        return result;
-    }
-
-    /// Input: square system, right-hand side, optional initial guess, options, and restart size.
-    /// Output: approximate solution of `A x = b`.
-    /// Task: solve general nonsymmetric systems through restarted GMRES. The
-    /// implementation stores a compact Krylov basis and solves the small least
-    /// squares problem through normal equations, which is appropriate for the
-    /// foundation-scale matrices covered by this module.
-    template<FloatingPoint T>
-    [[nodiscard]]
-    IterativeSolveResult<T> GMRES(
-        const DynamicMatrix<T>& A,
-        const std::vector<T>& b,
-        std::vector<T> initial = {},
-        OptimizationOptions<T> options = {},
-        std::size_t restart = 30)
-    {
-        if (A.Rows() != A.Columns())
+        return
         {
-            throw std::invalid_argument("GMRES failed: matrix must be square.");
-        }
-        if (A.Rows() != b.size())
-        {
-            throw std::invalid_argument("GMRES failed: matrix rows must match b size.");
-        }
-        if (restart == 0)
-        {
-            throw std::invalid_argument("GMRES failed: restart must be non-zero.");
-        }
-
-        const std::size_t n =
-            b.size();
-
-        std::vector<T> x =
-            initial.empty()
-                ? std::vector<T>(n, T(0))
-                : std::move(initial);
-
-        optimization_detail::RequireSameSize(
             x,
-            b,
-            "GMRES failed: initial guess size must match b size.");
+            value,
+            optimization_detail::Norm(gradient(x)),
+            T(0),
+            settings.MaxIterations,
+            false,
+            "Newton stopped: maximum iterations reached."
+        };
+    }
 
-        IterativeSolveResult<T> result;
-        std::size_t totalIterations = 0;
+    //=========================================================
+    // Gauss-Newton
+    //
+    // Minimizes:
+    //     1/2 * ||r(x)||^2
+    //
+    // User supplies:
+    //     residual(x) -> column vector r
+    //     jacobian(x) -> matrix J
+    //=========================================================
 
-        while (totalIterations < options.MaxIterations)
+    template<FloatingPoint T, typename Residual, typename Jacobian>
+    [[nodiscard]]
+    OptimizationResult<T> GaussNewton(
+        Residual&& residual,
+        Jacobian&& jacobian,
+        DynamicMatrix<T> initialX,
+        OptimizationSettings<T> settings = {})
+    {
+        optimization_detail::RequireColumnVector(
+            initialX,
+            "initialX");
+
+        DynamicMatrix<T> x =
+            std::move(initialX);
+
+        for (std::size_t iteration = 0;
+             iteration < settings.MaxIterations;
+             ++iteration)
         {
-            const std::vector<T> residual =
-                optimization_detail::Subtract(
-                    b,
-                    optimization_detail::MatrixVector(A, x));
+            const DynamicMatrix<T> r =
+                residual(x);
 
-            const T beta =
-                optimization_detail::Norm(residual);
+            optimization_detail::RequireColumnVector(
+                r,
+                "residual");
 
-            if (beta <= options.GradientTolerance)
+            const DynamicMatrix<T> J =
+                jacobian(x);
+
+            if (J.Rows() != r.Rows() ||
+                J.Columns() != x.Rows())
             {
-                result.Converged = true;
-                result.ResidualNorm = beta;
-                break;
+                throw std::invalid_argument(
+                    "GaussNewton failed: Jacobian shape must be residual_size x parameter_count.");
             }
 
-            const std::size_t innerLimit =
-                std::min(restart, options.MaxIterations - totalIterations);
+            const DynamicMatrix<T> JT =
+                J.Transpose();
 
-            DynamicMatrix<T> V(n, innerLimit + 1, T(0));
-            for (std::size_t row = 0; row < n; ++row)
+            const DynamicMatrix<T> gradient =
+                JT * r;
+
+            const T gradientNorm =
+                optimization_detail::Norm(
+                    gradient);
+
+            const T value =
+                optimization_detail::LeastSquaresValue(
+                    r);
+
+            if (gradientNorm <= settings.GradientTolerance)
             {
-                V(row, 0) = residual[row] / beta;
+                return
+                {
+                    x,
+                    value,
+                    gradientNorm,
+                    T(0),
+                    iteration,
+                    true,
+                    "GaussNewton converged: gradient norm below tolerance."
+                };
             }
 
-            DynamicMatrix<T> H(innerLimit + 1, innerLimit, T(0));
-            std::size_t usedInner = 0;
+            const DynamicMatrix<T> normalMatrix =
+                JT * J;
 
-            for (std::size_t j = 0; j < innerLimit; ++j)
+            const DynamicMatrix<T> rhs =
+                optimization_detail::Negative(
+                    gradient);
+
+            const DynamicMatrix<T> direction =
+                LinearSolve(
+                    normalMatrix,
+                    rhs);
+
+            auto objective =
+                [&](const DynamicMatrix<T>& candidate) -> T
+                {
+                    return optimization_detail::LeastSquaresValue(
+                        residual(candidate));
+                };
+
+            T stepScale =
+                T(1);
+
+            if (settings.UseLineSearch)
             {
-                std::vector<T> vj(n);
-                for (std::size_t row = 0; row < n; ++row)
+                stepScale =
+                    optimization_detail::BacktrackingLineSearch(
+                        objective,
+                        x,
+                        direction,
+                        gradient,
+                        value,
+                        settings);
+            }
+
+            const DynamicMatrix<T> nextX =
+                optimization_detail::AddScaled(
+                    x,
+                    direction,
+                    stepScale);
+
+            const T nextValue =
+                objective(nextX);
+
+            const T stepNorm =
+                optimization_detail::Norm(
+                    nextX - x);
+
+            const T valueChange =
+                std::abs(nextValue - value);
+
+            x =
+                nextX;
+
+            if (stepNorm <= settings.StepTolerance ||
+                valueChange <= settings.ValueTolerance)
+            {
+                return
                 {
-                    vj[row] = V(row, j);
-                }
+                    x,
+                    nextValue,
+                    gradientNorm,
+                    stepNorm,
+                    iteration + 1,
+                    true,
+                    "GaussNewton converged: step/value tolerance reached."
+                };
+            }
+        }
 
-                std::vector<T> w =
-                    optimization_detail::MatrixVector(A, vj);
+        const DynamicMatrix<T> finalResidual =
+            residual(x);
 
-                for (std::size_t i = 0; i <= j; ++i)
+        const DynamicMatrix<T> finalJ =
+            jacobian(x);
+
+        const DynamicMatrix<T> finalGradient =
+            finalJ.Transpose() *
+            finalResidual;
+
+        return
+        {
+            x,
+            optimization_detail::LeastSquaresValue(finalResidual),
+            optimization_detail::Norm(finalGradient),
+            T(0),
+            settings.MaxIterations,
+            false,
+            "GaussNewton stopped: maximum iterations reached."
+        };
+    }
+
+    //=========================================================
+    // Levenberg-Marquardt
+    //
+    // Solves damped normal equations:
+    //
+    //     (J^T J + lambda I) delta = -J^T r
+    //
+    // Lambda decreases on successful steps and increases on rejected steps.
+    //=========================================================
+
+    template<FloatingPoint T, typename Residual, typename Jacobian>
+    [[nodiscard]]
+    OptimizationResult<T> LevenbergMarquardt(
+        Residual&& residual,
+        Jacobian&& jacobian,
+        DynamicMatrix<T> initialX,
+        T initialLambda = T(1e-3),
+        T lambdaUp = T(10),
+        T lambdaDown = T(0.1),
+        OptimizationSettings<T> settings = {})
+    {
+        optimization_detail::RequireColumnVector(
+            initialX,
+            "initialX");
+
+        DynamicMatrix<T> x =
+            std::move(initialX);
+
+        T lambda =
+            initialLambda;
+
+        DynamicMatrix<T> r =
+            residual(x);
+
+        optimization_detail::RequireColumnVector(
+            r,
+            "residual");
+
+        T value =
+            optimization_detail::LeastSquaresValue(
+                r);
+
+        for (std::size_t iteration = 0;
+             iteration < settings.MaxIterations;
+             ++iteration)
+        {
+            const DynamicMatrix<T> J =
+                jacobian(x);
+
+            if (J.Rows() != r.Rows() ||
+                J.Columns() != x.Rows())
+            {
+                throw std::invalid_argument(
+                    "LevenbergMarquardt failed: Jacobian shape must be residual_size x parameter_count.");
+            }
+
+            const DynamicMatrix<T> JT =
+                J.Transpose();
+
+            const DynamicMatrix<T> gradient =
+                JT * r;
+
+            const T gradientNorm =
+                optimization_detail::Norm(
+                    gradient);
+
+            if (gradientNorm <= settings.GradientTolerance)
+            {
+                return
                 {
-                    std::vector<T> vi(n);
-                    for (std::size_t row = 0; row < n; ++row)
-                    {
-                        vi[row] = V(row, i);
-                    }
+                    x,
+                    value,
+                    gradientNorm,
+                    T(0),
+                    iteration,
+                    true,
+                    "LevenbergMarquardt converged: gradient norm below tolerance."
+                };
+            }
 
-                    H(i, j) =
-                        optimization_detail::DotVector(w, vi);
+            DynamicMatrix<T> damped =
+                JT * J;
 
-                    w =
-                        optimization_detail::AddScaled(
-                            w,
-                            vi,
-                            -H(i, j));
-                }
+            for (std::size_t i = 0; i < damped.Rows(); ++i)
+            {
+                damped(i, i) += lambda;
+            }
 
-                H(j + 1, j) =
-                    optimization_detail::Norm(w);
+            const DynamicMatrix<T> rhs =
+                optimization_detail::Negative(
+                    gradient);
 
-                if (H(j + 1, j) > options.Epsilon)
-                {
-                    for (std::size_t row = 0; row < n; ++row)
-                    {
-                        V(row, j + 1) = w[row] / H(j + 1, j);
-                    }
-                }
+            DynamicMatrix<T> direction;
 
-                usedInner = j + 1;
-
-                DynamicMatrix<T> Hk(usedInner + 1, usedInner, T(0));
-                for (std::size_t row = 0; row < usedInner + 1; ++row)
-                {
-                    for (std::size_t col = 0; col < usedInner; ++col)
-                    {
-                        Hk(row, col) = H(row, col);
-                    }
-                }
-
-                std::vector<T> rhs(usedInner + 1, T(0));
-                rhs[0] = beta;
-
-                const std::vector<T> normalRhs =
-                    optimization_detail::TransposeMatrixVector(Hk, rhs);
-
-                const std::vector<T> y =
+            try
+            {
+                direction =
                     LinearSolve(
-                        Hk.Transpose() * Hk,
-                        normalRhs);
+                        damped,
+                        rhs);
+            }
+            catch (...)
+            {
+                lambda *=
+                    lambdaUp;
 
-                std::vector<T> candidate =
-                    x;
+                continue;
+            }
 
-                for (std::size_t col = 0; col < usedInner; ++col)
+            const DynamicMatrix<T> candidateX =
+                x + direction;
+
+            const DynamicMatrix<T> candidateResidual =
+                residual(candidateX);
+
+            const T candidateValue =
+                optimization_detail::LeastSquaresValue(
+                    candidateResidual);
+
+            const T stepNorm =
+                optimization_detail::Norm(
+                    direction);
+
+            if (std::isfinite(candidateValue) &&
+                candidateValue < value)
+            {
+                const T valueChange =
+                    std::abs(value - candidateValue);
+
+                x =
+                    candidateX;
+
+                r =
+                    candidateResidual;
+
+                value =
+                    candidateValue;
+
+                lambda =
+                    std::max(
+                        lambda * lambdaDown,
+                        std::numeric_limits<T>::epsilon());
+
+                if (stepNorm <= settings.StepTolerance ||
+                    valueChange <= settings.ValueTolerance)
                 {
-                    for (std::size_t row = 0; row < n; ++row)
+                    return
                     {
-                        candidate[row] += V(row, col) * y[col];
-                    }
-                }
-
-                const T candidateResidual =
-                    optimization_detail::Norm(
-                        optimization_detail::Subtract(
-                            b,
-                            optimization_detail::MatrixVector(A, candidate)));
-
-                ++totalIterations;
-
-                if (candidateResidual <= options.GradientTolerance)
-                {
-                    x = candidate;
-                    result.Converged = true;
-                    result.ResidualNorm = candidateResidual;
-                    break;
-                }
-
-                if (H(j + 1, j) <= options.Epsilon)
-                {
-                    x = candidate;
-                    break;
-                }
-
-                if (j + 1 == innerLimit)
-                {
-                    x = candidate;
+                        x,
+                        value,
+                        gradientNorm,
+                        stepNorm,
+                        iteration + 1,
+                        true,
+                        "LevenbergMarquardt converged: step/value tolerance reached."
+                    };
                 }
             }
-
-            if (usedInner == 0 || result.Converged)
+            else
             {
-                break;
+                lambda *=
+                    lambdaUp;
             }
         }
 
-        result.Solution = x;
-        result.Iterations = totalIterations;
-        result.ResidualNorm =
-            optimization_detail::Norm(
-                optimization_detail::Subtract(
-                    b,
-                    optimization_detail::MatrixVector(A, x)));
-        result.Converged =
-            result.Converged ||
-            result.ResidualNorm <= options.GradientTolerance;
-        return result;
+        const DynamicMatrix<T> finalJ =
+            jacobian(x);
+
+        const DynamicMatrix<T> finalGradient =
+            finalJ.Transpose() *
+            residual(x);
+
+        return
+        {
+            x,
+            value,
+            optimization_detail::Norm(finalGradient),
+            T(0),
+            settings.MaxIterations,
+            false,
+            "LevenbergMarquardt stopped: maximum iterations reached."
+        };
     }
 
-    /// Input: Hessian `H`, linear term `g`, equality matrix `A`, and target `b`.
-    /// Output: primal variables and Lagrange multipliers solving the KKT system.
-    /// Task: solve equality constrained quadratic objectives:
-    /// `min 0.5*x^T H x + g^T x` subject to `A*x = b`.
-    template<FloatingPoint T>
-    [[nodiscard]]
-    EqualityConstrainedQPResult<T> LagrangeMultipliers(
-        const DynamicMatrix<T>& H,
-        const std::vector<T>& g,
-        const DynamicMatrix<T>& A,
-        const std::vector<T>& b)
-    {
-        if (H.Rows() != H.Columns())
-        {
-            throw std::invalid_argument("LagrangeMultipliers failed: Hessian must be square.");
-        }
-        if (H.Rows() != g.size())
-        {
-            throw std::invalid_argument("LagrangeMultipliers failed: Hessian rows must match gradient size.");
-        }
-        if (A.Columns() != g.size())
-        {
-            throw std::invalid_argument("LagrangeMultipliers failed: constraint columns must match variable count.");
-        }
-        if (A.Rows() != b.size())
-        {
-            throw std::invalid_argument("LagrangeMultipliers failed: constraint rows must match b size.");
-        }
-
-        const std::size_t variableCount =
-            g.size();
-
-        const std::size_t constraintCount =
-            b.size();
-
-        DynamicMatrix<T> kkt(
-            variableCount + constraintCount,
-            variableCount + constraintCount,
-            T(0));
-
-        std::vector<T> rhs(variableCount + constraintCount, T(0));
-
-        for (std::size_t row = 0; row < variableCount; ++row)
-        {
-            rhs[row] = -g[row];
-            for (std::size_t col = 0; col < variableCount; ++col)
-            {
-                kkt(row, col) = H(row, col);
-            }
-            for (std::size_t constraint = 0; constraint < constraintCount; ++constraint)
-            {
-                kkt(row, variableCount + constraint) = A(constraint, row);
-            }
-        }
-
-        for (std::size_t constraint = 0; constraint < constraintCount; ++constraint)
-        {
-            rhs[variableCount + constraint] = b[constraint];
-            for (std::size_t col = 0; col < variableCount; ++col)
-            {
-                kkt(variableCount + constraint, col) = A(constraint, col);
-            }
-        }
-
-        const std::vector<T> solution =
-            LinearSolve(kkt, rhs);
-
-        EqualityConstrainedQPResult<T> result;
-        result.Primal.assign(
-            solution.begin(),
-            solution.begin() + static_cast<std::ptrdiff_t>(variableCount));
-
-        result.Multipliers.assign(
-            solution.begin() + static_cast<std::ptrdiff_t>(variableCount),
-            solution.end());
-
-        result.ObjectiveValue =
-            optimization_detail::QuadraticObjectiveValue(
-                H,
-                g,
-                result.Primal);
-
-        result.KKTResidualNorm =
-            optimization_detail::Norm(
-                optimization_detail::Subtract(
-                    optimization_detail::MatrixVector(kkt, solution),
-                    rhs));
-
-        return result;
-    }
-
-    /// Input: Hessian, linear term, equality constraints, and equality targets.
-    /// Output: equality-constrained quadratic-program solution.
-    /// Task: provide the named QP entry point for convex equality-constrained
-    /// problems. Inequality/active-set handling belongs to a later optimization
-    /// layer; this function intentionally solves the complete equality KKT
-    /// system exactly through the dynamic linear algebra module.
-    template<FloatingPoint T>
-    [[nodiscard]]
-    EqualityConstrainedQPResult<T> QuadraticProgramming(
-        const DynamicMatrix<T>& H,
-        const std::vector<T>& g,
-        const DynamicMatrix<T>& A,
-        const std::vector<T>& b)
-    {
-        return LagrangeMultipliers(
-            H,
-            g,
-            A,
-            b);
-    }
-}
+} // namespace kairo::foundation::math

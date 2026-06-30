@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <algorithm>
+#include <initializer_list>
 #include <stdexcept>
 #include <vector>
 
@@ -1058,239 +1059,341 @@ TEST_CASE("Matrix Functions Phase 6", "[LinearAlgebra][MatrixFunctions]")
 
 TEST_CASE("Optimization Phase C", "[Optimization]")
 {
-    auto objective =
-        [](const std::vector<double>& x)
-        {
-            const double dx =
-                x[0] - 3.0;
-
-            const double dy =
-                x[1] + 2.0;
-
-            return (dx * dx) + (dy * dy);
-        };
-
-    auto gradient =
-        [](const std::vector<double>& x)
-        {
-            return std::vector<double>
-            {
-                2.0 * (x[0] - 3.0),
-                2.0 * (x[1] + 2.0)
-            };
-        };
-
-    OptimizationOptions<double> options;
-    options.MaxIterations = 600;
-    options.LearningRate = 0.1;
-    options.GradientTolerance = 1.0e-8;
-
-    SECTION("Gradient descent, momentum, Nesterov, and Adam minimize a quadratic")
+    auto column = [](std::initializer_list<double> values)
     {
-        auto gd =
+        DynamicMatrix<double> result(values.size(), 1);
+        std::size_t row = 0;
+
+        for (double value : values)
+        {
+            result(row, 0) = value;
+            ++row;
+        }
+
+        return result;
+    };
+
+    SECTION("GradientDescent minimizes f(x,y)=x^2+y^2")
+    {
+        auto objective = [](const DynamicMatrix<double>& x)
+        {
+            return (x(0, 0) * x(0, 0)) + (x(1, 0) * x(1, 0));
+        };
+
+        auto gradient = [](const DynamicMatrix<double>& x)
+        {
+            return DynamicMatrix<double>(2, 1, {
+                2.0 * x(0, 0),
+                2.0 * x(1, 0)
+            });
+        };
+
+        OptimizationSettings<double> settings;
+        settings.MaxIterations = 200;
+        settings.LearningRate = 1.0;
+        settings.GradientTolerance = 1.0e-10;
+
+        const auto result =
             GradientDescent(
                 objective,
                 gradient,
-                std::vector<double>{ 0.0, 0.0 },
-                options);
+                column({ 3.0, -4.0 }),
+                settings);
 
-        REQUIRE(gd.Converged);
-        REQUIRE(std::abs(gd.Position[0] - 3.0) < 1.0e-5);
-        REQUIRE(std::abs(gd.Position[1] + 2.0) < 1.0e-5);
+        REQUIRE(result.Converged);
+        REQUIRE(result.Value < 1.0e-18);
+        REQUIRE(std::abs(result.X(0, 0)) < 1.0e-9);
+        REQUIRE(std::abs(result.X(1, 0)) < 1.0e-9);
+    }
 
-        auto momentum =
+    SECTION("Momentum minimizes shifted parabola")
+    {
+        auto objective = [](const DynamicMatrix<double>& x)
+        {
+            const double dx = x(0, 0) - 2.0;
+            const double dy = x(1, 0) + 3.0;
+            return (dx * dx) + (dy * dy);
+        };
+
+        auto gradient = [](const DynamicMatrix<double>& x)
+        {
+            return DynamicMatrix<double>(2, 1, {
+                2.0 * (x(0, 0) - 2.0),
+                2.0 * (x(1, 0) + 3.0)
+            });
+        };
+
+        OptimizationSettings<double> settings;
+        settings.MaxIterations = 1000;
+        settings.LearningRate = 0.03;
+        settings.GradientTolerance = 1.0e-8;
+        settings.ValueTolerance = 0.0;
+
+        const auto result =
             Momentum(
                 objective,
                 gradient,
-                std::vector<double>{ 0.0, 0.0 },
-                options);
+                column({ -5.0, 4.0 }),
+                0.9,
+                settings);
 
-        REQUIRE(momentum.Value < 1.0e-6);
+        REQUIRE(result.Converged);
+        REQUIRE(result.Value < 1.0e-10);
+        REQUIRE(std::abs(result.X(0, 0) - 2.0) < 1.0e-5);
+        REQUIRE(std::abs(result.X(1, 0) + 3.0) < 1.0e-5);
+    }
 
-        auto nesterov =
+    SECTION("Nesterov minimizes shifted parabola")
+    {
+        auto objective = [](const DynamicMatrix<double>& x)
+        {
+            const double dx = x(0, 0) + 1.0;
+            const double dy = x(1, 0) - 5.0;
+            return (dx * dx) + (dy * dy);
+        };
+
+        auto gradient = [](const DynamicMatrix<double>& x)
+        {
+            return DynamicMatrix<double>(2, 1, {
+                2.0 * (x(0, 0) + 1.0),
+                2.0 * (x(1, 0) - 5.0)
+            });
+        };
+
+        OptimizationSettings<double> settings;
+        settings.MaxIterations = 1000;
+        settings.LearningRate = 0.03;
+        settings.GradientTolerance = 1.0e-8;
+        settings.ValueTolerance = 0.0;
+
+        const auto result =
             Nesterov(
                 objective,
                 gradient,
-                std::vector<double>{ 0.0, 0.0 },
-                options);
+                column({ 4.0, -2.0 }),
+                0.9,
+                settings);
 
-        REQUIRE(nesterov.Value < 1.0e-6);
+        REQUIRE(result.Converged);
+        REQUIRE(result.Value < 1.0e-10);
+        REQUIRE(std::abs(result.X(0, 0) + 1.0) < 1.0e-5);
+        REQUIRE(std::abs(result.X(1, 0) - 5.0) < 1.0e-5);
+    }
 
-        options.LearningRate = 0.05;
-        auto adam =
+    SECTION("Adam minimizes Rosenbrock approximately")
+    {
+        auto objective = [](const DynamicMatrix<double>& x)
+        {
+            const double a = 1.0 - x(0, 0);
+            const double b = x(1, 0) - (x(0, 0) * x(0, 0));
+            return (a * a) + (100.0 * b * b);
+        };
+
+        auto gradient = [](const DynamicMatrix<double>& x)
+        {
+            const double x0 = x(0, 0);
+            const double x1 = x(1, 0);
+            return DynamicMatrix<double>(2, 1, {
+                -2.0 * (1.0 - x0) - (400.0 * x0 * (x1 - (x0 * x0))),
+                200.0 * (x1 - (x0 * x0))
+            });
+        };
+
+        OptimizationSettings<double> settings;
+        settings.MaxIterations = 20000;
+        settings.LearningRate = 0.002;
+        settings.GradientTolerance = 1.0e-5;
+        settings.StepTolerance = 1.0e-14;
+        settings.ValueTolerance = 0.0;
+
+        const auto result =
             Adam(
                 objective,
                 gradient,
-                std::vector<double>{ 0.0, 0.0 },
-                options);
+                column({ -1.2, 1.0 }),
+                0.9,
+                0.999,
+                1.0e-8,
+                settings);
 
-        REQUIRE(adam.Value < 1.0e-5);
+        REQUIRE(result.Value < 1.0e-3);
+        REQUIRE(std::abs(result.X(0, 0) - 1.0) < 4.0e-2);
+        REQUIRE(std::abs(result.X(1, 0) - 1.0) < 8.0e-2);
     }
 
-    SECTION("Newton solves a quadratic in one direct step")
+    SECTION("ConjugateGradientSolve solves small SPD system")
     {
-        auto hessian =
-            [](const std::vector<double>&)
-            {
-                return DynamicMatrix<double>(2, 2, {
-                    2.0, 0.0,
-                    0.0, 2.0
-                });
-            };
-
-        auto result =
-            Newton(
-                objective,
-                gradient,
-                hessian,
-                std::vector<double>{ 0.0, 0.0 },
-                options);
-
-        REQUIRE(result.Value < 1.0e-20);
-        REQUIRE(std::abs(result.Position[0] - 3.0) < 1.0e-10);
-        REQUIRE(std::abs(result.Position[1] + 2.0) < 1.0e-10);
-    }
-
-    SECTION("Gauss Newton and Levenberg Marquardt solve least squares")
-    {
-        auto residual =
-            [](const std::vector<double>& x)
-            {
-                return std::vector<double>
-                {
-                    x[0] - 4.0,
-                    x[1] + 1.0
-                };
-            };
-
-        auto jacobian =
-            [](const std::vector<double>&)
-            {
-                return DynamicMatrix<double>(2, 2, {
-                    1.0, 0.0,
-                    0.0, 1.0
-                });
-            };
-
-        auto gaussNewton =
-            GaussNewton(
-                residual,
-                jacobian,
-                std::vector<double>{ 0.0, 0.0 },
-                options);
-
-        REQUIRE(gaussNewton.Value < 1.0e-20);
-        REQUIRE(std::abs(gaussNewton.Position[0] - 4.0) < 1.0e-10);
-        REQUIRE(std::abs(gaussNewton.Position[1] + 1.0) < 1.0e-10);
-
-        auto lm =
-            LevenbergMarquardt(
-                residual,
-                jacobian,
-                std::vector<double>{ 0.0, 0.0 },
-                options);
-
-        REQUIRE(lm.Value < 1.0e-8);
-    }
-
-    SECTION("CG, preconditioned CG, and GMRES solve linear systems")
-    {
-        DynamicMatrix<double> spd(2, 2, {
+        DynamicMatrix<double> A(2, 2, {
             4.0, 1.0,
             1.0, 3.0
         });
 
-        std::vector<double> b =
-        {
-            1.0,
-            2.0
-        };
+        OptimizationSettings<double> settings;
+        settings.MaxIterations = 20;
+        settings.GradientTolerance = 1.0e-12;
 
-        options.MaxIterations = 20;
-        options.GradientTolerance = 1.0e-10;
+        const auto result =
+            ConjugateGradientSolve(
+                A,
+                column({ 1.0, 2.0 }),
+                settings);
 
-        auto cg =
-            ConjugateGradient(
-                spd,
-                b,
-                {},
-                options);
-
-        REQUIRE(cg.Converged);
-        REQUIRE(std::abs(cg.Solution[0] - (1.0 / 11.0)) < 1.0e-9);
-        REQUIRE(std::abs(cg.Solution[1] - (7.0 / 11.0)) < 1.0e-9);
-
-        auto pcg =
-            PreconditionedConjugateGradient(
-                spd,
-                b,
-                std::vector<double>{ 0.25, 1.0 / 3.0 },
-                {},
-                options);
-
-        REQUIRE(pcg.Converged);
-        REQUIRE(std::abs(pcg.Solution[0] - (1.0 / 11.0)) < 1.0e-9);
-        REQUIRE(std::abs(pcg.Solution[1] - (7.0 / 11.0)) < 1.0e-9);
-
-        DynamicMatrix<double> nonsymmetric(2, 2, {
-            3.0, 1.0,
-            0.0, 2.0
-        });
-
-        auto gmres =
-            GMRES(
-                nonsymmetric,
-                std::vector<double>{ 5.0, 4.0 },
-                {},
-                options,
-                2);
-
-        REQUIRE(gmres.Converged);
-        REQUIRE(std::abs(gmres.Solution[0] - 1.0) < 1.0e-8);
-        REQUIRE(std::abs(gmres.Solution[1] - 2.0) < 1.0e-8);
+        REQUIRE(result.Converged);
+        REQUIRE(result.ResidualNorm < 1.0e-12);
+        REQUIRE(std::abs(result.X(0, 0) - (1.0 / 11.0)) < 1.0e-10);
+        REQUIRE(std::abs(result.X(1, 0) - (7.0 / 11.0)) < 1.0e-10);
     }
 
-    SECTION("Lagrange multipliers and QP solve equality constrained quadratic")
+    SECTION("Newton solves quadratic in one/few steps")
     {
-        DynamicMatrix<double> H(2, 2, {
-            1.0, 0.0,
-            0.0, 1.0
-        });
-
-        std::vector<double> g =
+        auto objective = [](const DynamicMatrix<double>& x)
         {
-            0.0,
-            0.0
+            const double dx = x(0, 0) - 3.0;
+            const double dy = x(1, 0) + 2.0;
+            return (dx * dx) + (dy * dy);
         };
 
-        DynamicMatrix<double> A(1, 2, {
-            1.0, 1.0
-        });
-
-        std::vector<double> b =
+        auto gradient = [](const DynamicMatrix<double>& x)
         {
-            1.0
+            return DynamicMatrix<double>(2, 1, {
+                2.0 * (x(0, 0) - 3.0),
+                2.0 * (x(1, 0) + 2.0)
+            });
         };
 
-        auto lagrange =
-            LagrangeMultipliers(
-                H,
-                g,
-                A,
-                b);
+        auto hessian = [](const DynamicMatrix<double>&)
+        {
+            return DynamicMatrix<double>(2, 2, {
+                2.0, 0.0,
+                0.0, 2.0
+            });
+        };
 
-        REQUIRE(std::abs(lagrange.Primal[0] - 0.5) < 1.0e-10);
-        REQUIRE(std::abs(lagrange.Primal[1] - 0.5) < 1.0e-10);
-        REQUIRE(lagrange.KKTResidualNorm < 1.0e-10);
+        OptimizationSettings<double> settings;
+        settings.MaxIterations = 20;
+        settings.GradientTolerance = 1.0e-12;
 
-        auto qp =
-            QuadraticProgramming(
-                H,
-                g,
-                A,
-                b);
+        const auto result =
+            Newton(
+                objective,
+                gradient,
+                hessian,
+                column({ 0.0, 0.0 }),
+                settings);
 
-        REQUIRE(std::abs(qp.ObjectiveValue - 0.25) < 1.0e-10);
+        REQUIRE(result.Converged);
+        REQUIRE(result.Value < 1.0e-20);
+        REQUIRE(std::abs(result.X(0, 0) - 3.0) < 1.0e-10);
+        REQUIRE(std::abs(result.X(1, 0) + 2.0) < 1.0e-10);
+    }
+
+    SECTION("GaussNewton fits y = ax + b")
+    {
+        const std::vector<double> xs = { 0.0, 1.0, 2.0, 3.0 };
+        const std::vector<double> ys = { 1.0, 3.0, 5.0, 7.0 };
+
+        auto residual = [&](const DynamicMatrix<double>& p)
+        {
+            DynamicMatrix<double> r(xs.size(), 1);
+
+            for (std::size_t i = 0; i < xs.size(); ++i)
+            {
+                r(i, 0) = (p(0, 0) * xs[i]) + p(1, 0) - ys[i];
+            }
+
+            return r;
+        };
+
+        auto jacobian = [&](const DynamicMatrix<double>&)
+        {
+            DynamicMatrix<double> J(xs.size(), 2);
+
+            for (std::size_t i = 0; i < xs.size(); ++i)
+            {
+                J(i, 0) = xs[i];
+                J(i, 1) = 1.0;
+            }
+
+            return J;
+        };
+
+        OptimizationSettings<double> settings;
+        settings.MaxIterations = 20;
+        settings.GradientTolerance = 1.0e-12;
+
+        const auto result =
+            GaussNewton(
+                residual,
+                jacobian,
+                column({ 0.0, 0.0 }),
+                settings);
+
+        REQUIRE(result.Converged);
+        REQUIRE(result.Value < 1.0e-20);
+        REQUIRE(std::abs(result.X(0, 0) - 2.0) < 1.0e-10);
+        REQUIRE(std::abs(result.X(1, 0) - 1.0) < 1.0e-10);
+    }
+
+    SECTION("LevenbergMarquardt fits y = a * exp(bx)")
+    {
+        const std::vector<double> xs = { 0.0, 0.5, 1.0, 1.5 };
+        const double trueA = 2.0;
+        const double trueB = 0.4;
+
+        auto residual = [&](const DynamicMatrix<double>& p)
+        {
+            DynamicMatrix<double> r(xs.size(), 1);
+
+            for (std::size_t i = 0; i < xs.size(); ++i)
+            {
+                const double predicted =
+                    p(0, 0) * std::exp(p(1, 0) * xs[i]);
+
+                const double observed =
+                    trueA * std::exp(trueB * xs[i]);
+
+                r(i, 0) = predicted - observed;
+            }
+
+            return r;
+        };
+
+        auto jacobian = [&](const DynamicMatrix<double>& p)
+        {
+            DynamicMatrix<double> J(xs.size(), 2);
+
+            for (std::size_t i = 0; i < xs.size(); ++i)
+            {
+                const double expTerm =
+                    std::exp(p(1, 0) * xs[i]);
+
+                J(i, 0) = expTerm;
+                J(i, 1) = p(0, 0) * xs[i] * expTerm;
+            }
+
+            return J;
+        };
+
+        OptimizationSettings<double> settings;
+        settings.MaxIterations = 100;
+        settings.GradientTolerance = 1.0e-12;
+        settings.StepTolerance = 1.0e-12;
+        settings.ValueTolerance = 1.0e-14;
+
+        const auto result =
+            LevenbergMarquardt(
+                residual,
+                jacobian,
+                column({ 1.5, 0.1 }),
+                1.0e-3,
+                10.0,
+                0.1,
+                settings);
+
+        REQUIRE(result.Converged);
+        REQUIRE(result.Value < 1.0e-18);
+        REQUIRE(std::abs(result.X(0, 0) - trueA) < 1.0e-8);
+        REQUIRE(std::abs(result.X(1, 0) - trueB) < 1.0e-8);
     }
 }
 
