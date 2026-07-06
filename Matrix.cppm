@@ -1528,6 +1528,14 @@ export namespace kairo::foundation::math
     /// This uses Gauss-Jordan elimination with partial pivoting. It is readable,
     /// robust enough for foundation code, allocation-free, and easy to replace
     /// later with a SIMD-specialized affine inverse for hot transform paths.
+    ///
+    ///
+    /// Why it matters: * Camera: The "View Matrix"
+    /// (which renders the world from the player's perspective) is literally the exact inverse of the camera object's transform in the world.
+
+    /// Raycasting: If a player clicks their mouse,
+    /// you generate a 2D ray on the screen.
+    /// To see what 3D object they clicked in the world, you multiply that ray by the inverse of the projection matrix.
     template<FloatingPoint T>
     [[nodiscard]]
     constexpr Matrix4<T> Inverse(const Matrix4<T>& matrix) noexcept

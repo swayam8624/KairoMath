@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <initializer_list>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 import Kairo.Foundation.Math.Vector;
@@ -348,6 +349,53 @@ TEST_CASE("DynamicMatrix Core Features", "[DynamicMatrix]")
         REQUIRE(m4(0, 1) == 2.0f);
         REQUIRE(m4(1, 0) == 3.0f);
         REQUIRE(m4(1, 1) == 4.0f);
+
+        DynamicMatrix<float> m5(2, 2, {1.0f, 2.0f, 3.0f, 4.0f});
+        REQUIRE(m5(0, 0) == 1.0f);
+        REQUIRE(m5(1, 1) == 4.0f);
+        REQUIRE_THROWS_AS(
+            DynamicMatrix<float>(2, 2, {1.0f, 2.0f, 3.0f}),
+            std::invalid_argument);
+
+        m5.At(1, 0) = 7.0f;
+        REQUIRE(m5.At(1, 0) == 7.0f);
+        REQUIRE_THROWS_AS(m5.At(2, 0), std::out_of_range);
+        REQUIRE_THROWS_AS(m5.At(0, 2), std::out_of_range);
+
+        float* rowData = m5.RowData(1);
+        REQUIRE(rowData[0] == 7.0f);
+        REQUIRE(rowData[1] == 4.0f);
+
+        auto row = m5.RowSpan(0);
+        REQUIRE(row.size() == 2);
+        row[1] = 9.0f;
+        REQUIRE(m5(0, 1) == 9.0f);
+        REQUIRE_THROWS_AS(m5.RowSpan(2), std::out_of_range);
+    }
+
+    SECTION("Move operations leave source empty")
+    {
+        DynamicMatrix<float> source(3, 3, 2.0f);
+        DynamicMatrix<float> moved(std::move(source));
+
+        REQUIRE(moved.Rows() == 3);
+        REQUIRE(moved.Columns() == 3);
+        REQUIRE(moved.Size() == 9);
+        REQUIRE(source.Rows() == 0);
+        REQUIRE(source.Columns() == 0);
+        REQUIRE(source.Size() == 0);
+        REQUIRE(source.Empty());
+
+        DynamicMatrix<float> assigned(1, 1, 1.0f);
+        assigned = std::move(moved);
+
+        REQUIRE(assigned.Rows() == 3);
+        REQUIRE(assigned.Columns() == 3);
+        REQUIRE(assigned.Size() == 9);
+        REQUIRE(moved.Rows() == 0);
+        REQUIRE(moved.Columns() == 0);
+        REQUIRE(moved.Size() == 0);
+        REQUIRE(moved.Empty());
     }
 
     SECTION("Factories and Operators")
@@ -407,6 +455,21 @@ TEST_CASE("DynamicMatrix Core Features", "[DynamicMatrix]")
         square.SwapColumns(0, 1);
         REQUIRE(square(0, 0) == 4.0f);
         REQUIRE(square(1, 0) == 2.0f);
+    }
+
+    SECTION("NearlyEqual uses relative tolerance")
+    {
+        DynamicMatrix<double> largeA(1, 1, {1.0e9});
+        DynamicMatrix<double> largeB(1, 1, {1.0e9 + 8.0});
+        REQUIRE(NearlyEqual(largeA, largeB, 1.0e-8));
+
+        DynamicMatrix<double> smallA(1, 1, {1.0e-12});
+        DynamicMatrix<double> smallB(1, 1, {2.0e-12});
+        REQUIRE(NearlyEqual(smallA, smallB, 1.0e-11));
+
+        DynamicMatrix<double> farA(1, 1, {1.0e9});
+        DynamicMatrix<double> farB(1, 1, {1.0e9 + 1000.0});
+        REQUIRE_FALSE(NearlyEqual(farA, farB, 1.0e-8));
     }
 }
 

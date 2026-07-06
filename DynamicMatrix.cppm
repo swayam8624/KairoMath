@@ -8,7 +8,9 @@ module;
 #include <initializer_list>
 #include <limits>
 #include <ostream>
+#include <span>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 export module Kairo.Foundation.Math.DynamicMatrix;
@@ -42,11 +44,65 @@ export namespace kairo::foundation::math
             return rows * cols;
         }
 
+        [[nodiscard]]
+        std::size_t CheckedOffset(std::size_t row, std::size_t col) const
+        {
+            if (row >= m_rows || col >= m_cols)
+            {
+                throw std::out_of_range("DynamicMatrix index error: row or column is out of range.");
+            }
+
+            return (row * m_cols) + col;
+        }
+
+        [[nodiscard]]
+        std::size_t CheckedRowOffset(std::size_t row) const
+        {
+            if (row >= m_rows)
+            {
+                throw std::out_of_range("DynamicMatrix row error: row is out of range.");
+            }
+
+            return row * m_cols;
+        }
+
     public:
         using ValueType = T;
 
         /// Default construction: empty 0x0 matrix.
         constexpr DynamicMatrix() noexcept = default;
+
+        DynamicMatrix(const DynamicMatrix&) = default;
+
+        DynamicMatrix& operator=(const DynamicMatrix&) = default;
+
+        /// Input: source matrix to move from.
+        /// Output: this matrix receives the source storage; source becomes 0x0.
+        /// Task: preserve the class invariant that empty storage implies an
+        /// empty shape even after move construction.
+        DynamicMatrix(DynamicMatrix&& other) noexcept
+            : m_rows(std::exchange(other.m_rows, 0))
+            , m_cols(std::exchange(other.m_cols, 0))
+            , m_data(std::move(other.m_data))
+        {
+            other.m_data.clear();
+        }
+
+        /// Input: source matrix to move from.
+        /// Output: this matrix receives the source storage; source becomes 0x0.
+        /// Task: keep moved-from matrices valid and safely reusable.
+        DynamicMatrix& operator=(DynamicMatrix&& other) noexcept
+        {
+            if (this != &other)
+            {
+                m_rows = std::exchange(other.m_rows, 0);
+                m_cols = std::exchange(other.m_cols, 0);
+                m_data = std::move(other.m_data);
+                other.m_data.clear();
+            }
+
+            return *this;
+        }
 
         /// Sized construction: zero-filled rows x cols matrix.
         DynamicMatrix(std::size_t rows, std::size_t cols)
@@ -74,6 +130,15 @@ export namespace kairo::foundation::math
             {
                 throw std::invalid_argument("DynamicMatrix constructor error: vector size does not match rows * cols.");
             }
+        }
+
+        /// Input: matrix shape and row-major initializer-list values.
+        /// Output: rows x cols matrix containing the supplied values.
+        /// Task: make tests, examples, and small literal matrices explicit
+        /// without relying on implicit initializer-list-to-vector conversion.
+        DynamicMatrix(std::size_t rows, std::size_t cols, std::initializer_list<T> values)
+            : DynamicMatrix(rows, cols, std::vector<T>(values))
+        {
         }
 
         /// Get row count.
@@ -136,6 +201,24 @@ export namespace kairo::foundation::math
             return m_data[(row * m_cols) + col];
         }
 
+        /// Input: row and column from runtime/user input.
+        /// Output: mutable element reference.
+        /// Task: checked 2D access for public APIs and data-driven callers.
+        [[nodiscard]]
+        T& At(std::size_t row, std::size_t col)
+        {
+            return m_data[CheckedOffset(row, col)];
+        }
+
+        /// Input: row and column from runtime/user input.
+        /// Output: const element reference.
+        /// Task: checked read-only 2D access for public APIs and data-driven callers.
+        [[nodiscard]]
+        const T& At(std::size_t row, std::size_t col) const
+        {
+            return m_data[CheckedOffset(row, col)];
+        }
+
         /// Linear indexing (mutable).
         [[nodiscard]]
         constexpr T& operator[](std::size_t index) noexcept
@@ -150,6 +233,42 @@ export namespace kairo::foundation::math
         {
             assert(index < m_data.size());
             return m_data[index];
+        }
+
+        /// Input: row index.
+        /// Output: mutable pointer to the first element in that row.
+        /// Task: efficient row-wise algorithms without repeated row*columns math.
+        [[nodiscard]]
+        T* RowData(std::size_t row)
+        {
+            return m_data.data() + CheckedRowOffset(row);
+        }
+
+        /// Input: row index.
+        /// Output: const pointer to the first element in that row.
+        /// Task: efficient read-only row-wise algorithms.
+        [[nodiscard]]
+        const T* RowData(std::size_t row) const
+        {
+            return m_data.data() + CheckedRowOffset(row);
+        }
+
+        /// Input: row index.
+        /// Output: mutable span covering one contiguous row.
+        /// Task: expose safe row views for algorithms that operate on rows.
+        [[nodiscard]]
+        std::span<T> RowSpan(std::size_t row)
+        {
+            return { RowData(row), m_cols };
+        }
+
+        /// Input: row index.
+        /// Output: const span covering one contiguous row.
+        /// Task: expose safe read-only row views for algorithms that operate on rows.
+        [[nodiscard]]
+        std::span<const T> RowSpan(std::size_t row) const
+        {
+            return { RowData(row), m_cols };
         }
 
         /// Exact equality comparison.
@@ -415,7 +534,10 @@ export namespace kairo::foundation::math
         return result;
     }
 
-    /// Epsilon-based validation helper.
+    /// Input: two same-shaped floating-point matrices and a tolerance factor.
+    /// Output: true when every element is close under shared scalar NearlyEqual.
+    /// Task: matrix-level comparison that inherits the absolute/relative
+    /// tolerance policy used by Vector and fixed-size Matrix helpers.
     template<FloatingPoint T>
     [[nodiscard]]
     bool NearlyEqual(
@@ -429,7 +551,7 @@ export namespace kairo::foundation::math
         }
         for (std::size_t i = 0; i < lhs.Size(); ++i)
         {
-            if (std::abs(lhs[i] - rhs[i]) > epsilon)
+            if (!kairo::foundation::math::NearlyEqual(lhs[i], rhs[i], epsilon))
             {
                 return false;
             }
@@ -437,7 +559,9 @@ export namespace kairo::foundation::math
         return true;
     }
 
-    /// Epsilon-based identity check helper.
+    /// Input: floating-point square matrix and a tolerance factor.
+    /// Output: true when diagonal/off-diagonal values match identity within tolerance.
+    /// Task: identity validation that shares the scalar relative tolerance policy.
     template<FloatingPoint T>
     [[nodiscard]]
     bool IsIdentity(
@@ -453,7 +577,7 @@ export namespace kairo::foundation::math
             for (std::size_t c = 0; c < matrix.Columns(); ++c)
             {
                 T expected = (r == c) ? T(1) : T(0);
-                if (std::abs(matrix(r, c) - expected) > epsilon)
+                if (!kairo::foundation::math::NearlyEqual(matrix(r, c), expected, epsilon))
                 {
                     return false;
                 }

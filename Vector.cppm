@@ -1364,9 +1364,12 @@ export namespace kairo::foundation::math
     // Comparison Helpers
     //=========================================================
 
-    /// Input: two floating-point scalars and an absolute epsilon.
-    /// Output: true when values are within epsilon.
-    /// Task: tolerate floating-point rounding noise in tests and engine logic.
+    /// Input: two floating-point scalars and a tolerance factor.
+    /// Output: true when values are close under absolute or relative tolerance.
+    /// Task: tolerate floating-point rounding noise across small and large
+    /// magnitudes. The absolute branch handles values near zero; the relative
+    /// branch prevents large-scale comparisons from being dominated by a tiny
+    /// fixed epsilon.
     template<FloatingPoint T>
     [[nodiscard]]
     constexpr bool NearlyEqual(
@@ -1374,12 +1377,31 @@ export namespace kairo::foundation::math
         T rhs,
         T epsilon = std::numeric_limits<T>::epsilon() * T(10)) noexcept
     {
-        return std::abs(lhs - rhs) <= epsilon;
+        const T difference =
+            std::abs(lhs - rhs);
+
+        if (difference <= epsilon)
+        {
+            return true;
+        }
+
+        T scale =
+            std::abs(lhs) > std::abs(rhs)
+                ? std::abs(lhs)
+                : std::abs(rhs);
+
+        if (scale < T(1))
+        {
+            scale = T(1);
+        }
+
+        return difference <= epsilon * scale;
     }
 
-    /// Input: two vectors and an absolute epsilon.
+    /// Input: two vectors and a scalar tolerance factor.
     /// Output: true when every component is nearly equal.
-    /// Task: vector floating-point comparison for tests and geometric checks.
+    /// Task: vector floating-point comparison for tests and geometric checks,
+    /// using the scalar absolute/relative tolerance policy per component.
     template<FloatingPoint T>
     [[nodiscard]]
     constexpr bool NearlyEqual(
@@ -1392,9 +1414,10 @@ export namespace kairo::foundation::math
             NearlyEqual(lhs.y, rhs.y, epsilon);
     }
 
-    /// Input: two vectors and an absolute epsilon.
+    /// Input: two vectors and a scalar tolerance factor.
     /// Output: true when every component is nearly equal.
-    /// Task: vector floating-point comparison for tests and geometric checks.
+    /// Task: vector floating-point comparison for tests and geometric checks,
+    /// using the scalar absolute/relative tolerance policy per component.
     template<FloatingPoint T>
     [[nodiscard]]
     constexpr bool NearlyEqual(
@@ -1408,9 +1431,10 @@ export namespace kairo::foundation::math
             NearlyEqual(lhs.z, rhs.z, epsilon);
     }
 
-    /// Input: two vectors and an absolute epsilon.
+    /// Input: two vectors and a scalar tolerance factor.
     /// Output: true when every component is nearly equal.
-    /// Task: vector floating-point comparison for tests and geometric checks.
+    /// Task: vector floating-point comparison for tests and geometric checks,
+    /// using the scalar absolute/relative tolerance policy per component.
     template<FloatingPoint T>
     [[nodiscard]]
     constexpr bool NearlyEqual(
