@@ -8,6 +8,7 @@ module;
 #include <limits>
 #include <numeric>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 export module Kairo.Foundation.Math.LinearAlgebra.Decomposition;
@@ -49,6 +50,106 @@ export namespace kairo::foundation::math
         DynamicMatrix<T> L;
         std::vector<T> D;
     };
+
+    /// Input: a vector of floating-point values.
+    /// Output: Euclidean 2-norm computed through std::hypot.
+    /// Task: avoid `sum += x*x` overflow for huge values and underflow for tiny
+    /// values in Householder-style algorithms.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    T RobustNorm2(const std::vector<T>& values) noexcept
+    {
+        T norm = T(0);
+        for (T value : values)
+        {
+            norm = std::hypot(norm, value);
+        }
+
+        return norm;
+    }
+
+    /// Input: a matrix.
+    /// Output: largest absolute entry, or zero for an empty matrix.
+    /// Task: give decomposition checks a single scale estimate instead of
+    /// duplicating max-abs scans in every algorithm.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    T MaxAbsEntry(const DynamicMatrix<T>& A) noexcept
+    {
+        T maxAbs = T(0);
+        for (std::size_t r = 0; r < A.Rows(); ++r)
+        {
+            for (std::size_t c = 0; c < A.Columns(); ++c)
+            {
+                maxAbs = std::max(maxAbs, std::abs(A(r, c)));
+            }
+        }
+
+        return maxAbs;
+    }
+
+    /// Input: matrix scale.
+    /// Output: absolute tolerance suitable for symmetry/pivot checks.
+    /// Task: make approximate comparisons scale with the matrix while still
+    /// allowing zero/small matrices to use a nonzero machine-epsilon floor.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    T DecompositionTolerance(T maxAbs) noexcept
+    {
+        return std::max(maxAbs, T(1)) *
+            std::numeric_limits<T>::epsilon() *
+            T(100);
+    }
+
+    /// Input: square matrix and tolerance.
+    /// Output: true when A(i,j) approximately equals A(j,i).
+    /// Task: validate the full matrix contract required by Cholesky and LDLT.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    bool IsApproximatelySymmetric(
+        const DynamicMatrix<T>& A,
+        T tolerance = T(-1))
+    {
+        if (A.Rows() != A.Columns())
+        {
+            return false;
+        }
+
+        if (tolerance < T(0))
+        {
+            tolerance = DecompositionTolerance(MaxAbsEntry(A));
+        }
+
+        for (std::size_t r = 0; r < A.Rows(); ++r)
+        {
+            for (std::size_t c = r + 1; c < A.Columns(); ++c)
+            {
+                if (std::abs(A(r, c) - A(c, r)) > tolerance)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /// Input: candidate symmetric matrix and decomposition name.
+    /// Output: throws when the full matrix is not approximately symmetric.
+    /// Task: prevent lower-triangle-only Cholesky/LDLT behavior from silently
+    /// accepting invalid full matrices.
+    template<FloatingPoint T>
+    void ValidateSymmetricMatrix(
+        const DynamicMatrix<T>& A,
+        const char* decompositionName)
+    {
+        if (!IsApproximatelySymmetric(A))
+        {
+            throw std::invalid_argument(
+                std::string(decompositionName) +
+                " decomposition failed: Matrix must be symmetric.");
+        }
+    }
 
     /// LU Decomposition (A = L * U).
     /// Assumes no pivoting is needed. Throws if a zero pivot is encountered.
@@ -203,13 +304,11 @@ export namespace kairo::foundation::math
             // Vector x = R[g..m-1, g]
             std::size_t len = m - g;
             std::vector<T> x(len);
-            T normSq = T(0);
             for (std::size_t i = 0; i < len; ++i)
             {
                 x[i] = R(g + i, g);
-                normSq += x[i] * x[i];
             }
-            T normX = std::sqrt(normSq);
+            T normX = RobustNorm2(x);
             if (normX <= std::numeric_limits<T>::epsilon() * T(10))
             {
                 continue;
@@ -225,12 +324,7 @@ export namespace kairo::foundation::math
             }
 
             // Normalize v
-            T vNormSq = T(0);
-            for (std::size_t i = 0; i < len; ++i)
-            {
-                vNormSq += v[i] * v[i];
-            }
-            T vNorm = std::sqrt(vNormSq);
+            T vNorm = RobustNorm2(v);
             if (vNorm > std::numeric_limits<T>::epsilon() * T(10))
             {
                 for (std::size_t i = 0; i < len; ++i)
@@ -285,16 +379,10 @@ export namespace kairo::foundation::math
         {
             throw std::invalid_argument("Cholesky decomposition failed: Matrix must be square.");
         }
+        ValidateSymmetricMatrix(A, "Cholesky");
         std::size_t n = A.Rows();
 
-        T maxAbs = T(0);
-        for (std::size_t r = 0; r < n; ++r)
-        {
-            for (std::size_t c = 0; c < n; ++c)
-            {
-                maxAbs = std::max(maxAbs, std::abs(A(r, c)));
-            }
-        }
+        T maxAbs = MaxAbsEntry(A);
         T threshold = maxAbs * std::numeric_limits<T>::epsilon() * T(10);
 
         DynamicMatrix<T> L = DynamicMatrix<T>::Zero(n, n);
@@ -343,16 +431,10 @@ export namespace kairo::foundation::math
         {
             throw std::invalid_argument("LDLT decomposition failed: Matrix must be square.");
         }
+        ValidateSymmetricMatrix(A, "LDLT");
         std::size_t n = A.Rows();
 
-        T maxAbs = T(0);
-        for (std::size_t r = 0; r < n; ++r)
-        {
-            for (std::size_t c = 0; c < n; ++c)
-            {
-                maxAbs = std::max(maxAbs, std::abs(A(r, c)));
-            }
-        }
+        T maxAbs = MaxAbsEntry(A);
         T threshold = maxAbs * std::numeric_limits<T>::epsilon() * T(10);
 
         DynamicMatrix<T> L = DynamicMatrix<T>::Identity(n);

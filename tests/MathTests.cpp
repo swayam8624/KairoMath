@@ -601,6 +601,22 @@ TEST_CASE("Decomposition Phase 2", "[Decomposition]")
         REQUIRE(IsIdentity(QTQ, 1e-4f));
     }
 
+    SECTION("QR uses robust Householder norms for large values")
+    {
+        DynamicMatrix<double> A(3, 2, {
+            1.0e150, 2.0e150,
+            3.0e150, -1.0e150,
+            -2.0e150, 4.0e150
+        });
+
+        auto qr = QR(A);
+        auto recon = qr.Q * qr.R;
+
+        REQUIRE(std::isfinite(qr.R(0, 0)));
+        REQUIRE(std::isfinite(qr.R(1, 1)));
+        REQUIRE(NearlyEqual(recon, A, 1.0e137));
+    }
+
     SECTION("Cholesky and LDLT")
     {
         // Symmetric positive-definite matrix
@@ -618,6 +634,18 @@ TEST_CASE("Decomposition Phase 2", "[Decomposition]")
         auto D = DynamicMatrix<float>::Diagonal(ldlt.D);
         auto reconLDLT = ldlt.L * D * ldlt.L.Transpose();
         REQUIRE(NearlyEqual(reconLDLT, A));
+    }
+
+    SECTION("Cholesky and LDLT reject non-symmetric input")
+    {
+        DynamicMatrix<float> A(2, 2, {
+            4.0f, 100.0f,
+            2.0f, 3.0f
+        });
+
+        REQUIRE_FALSE(IsApproximatelySymmetric(A));
+        REQUIRE_THROWS_AS(Cholesky(A), std::invalid_argument);
+        REQUIRE_THROWS_AS(LDLT(A), std::invalid_argument);
     }
 }
 
