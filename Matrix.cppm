@@ -200,7 +200,12 @@ export namespace kairo::foundation::math
         /// Input: another matrix.
         /// Output: exact element-wise equality.
         [[nodiscard]]
-        constexpr bool operator==(const Matrix2&) const noexcept = default;
+        constexpr bool operator==(const Matrix2& other) const noexcept
+        {
+            for (std::size_t index = 0u; index < ElementCount; ++index)
+                if (data[index] != other.data[index]) return false;
+            return true;
+        }
     };
 
 
@@ -407,7 +412,12 @@ export namespace kairo::foundation::math
         /// Task: deterministic comparisons for integer and exact matrices. Use
         /// NearlyEqual() for floating-point tolerance checks.
         [[nodiscard]]
-        constexpr bool operator==(const Matrix3&) const noexcept = default;
+        constexpr bool operator==(const Matrix3& other) const noexcept
+        {
+            for (std::size_t index = 0u; index < ElementCount; ++index)
+                if (data[index] != other.data[index]) return false;
+            return true;
+        }
     };
 
     //=========================================================
@@ -601,7 +611,12 @@ export namespace kairo::foundation::math
         /// Task: deterministic comparisons for exact matrices. Use NearlyEqual()
         /// for floating-point tolerance checks.
         [[nodiscard]]
-        constexpr bool operator==(const Matrix4&) const noexcept = default;
+        constexpr bool operator==(const Matrix4& other) const noexcept
+        {
+            for (std::size_t index = 0u; index < ElementCount; ++index)
+                if (data[index] != other.data[index]) return false;
+            return true;
+        }
     };
 
     //=========================================================
