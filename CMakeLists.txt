@@ -5,7 +5,8 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(KAIRO_MATH_BUILD_TESTS "Build KairoMath test and visual executables" ${PROJECT_IS_TOP_LEVEL})
+option(KAIRO_MATH_BUILD_TESTS "Build KairoMath unit tests" ${PROJECT_IS_TOP_LEVEL})
+option(KAIRO_MATH_BUILD_VISUALIZER "Build the standalone KairoMath visual laboratory" ${PROJECT_IS_TOP_LEVEL})
 
 # Compiler options
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
@@ -54,7 +55,12 @@ if(KAIRO_MATH_BUILD_TESTS)
     add_executable(MathTests tests/MathTests.cpp)
     target_link_libraries(MathTests PRIVATE KairoMath Catch2::Catch2WithMain)
 
-    # MathVisualizer executable
+endif()
+
+# The visual laboratory is a developer-facing executable, not a library test.
+# Keep it independently selectable so parent superbuilds do not inherit its
+# large generated report strings or local server workflow.
+if(KAIRO_MATH_BUILD_VISUALIZER)
     add_executable(MathVisualizer visual/VisualTests.cpp)
     target_link_libraries(MathVisualizer PRIVATE KairoMath)
 endif()

@@ -225,6 +225,10 @@ brew install llvm ninja cmake
     ./build/MathVisualizer
     ```
 
+`KAIRO_MATH_BUILD_VISUALIZER` defaults to `ON` for this standalone checkout.
+Parent superbuilds can leave it disabled while still building the library and
+unit tests; enable it explicitly when the local visual laboratory is required.
+
 ---
 
 ## Interactive Visual Lab & API Server
