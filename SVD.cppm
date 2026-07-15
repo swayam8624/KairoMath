@@ -7,6 +7,7 @@ module;
 #include <cstddef>
 #include <limits>
 #include <numeric>
+#include <stdexcept>
 #include <vector>
 
 export module Kairo.Foundation.Math.LinearAlgebra.SVD;
