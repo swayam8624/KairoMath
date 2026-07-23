@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.28)
 project(Math LANGUAGES CXX)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -54,6 +56,7 @@ if(KAIRO_MATH_BUILD_TESTS)
     # MathTests executable
     add_executable(MathTests tests/MathTests.cpp)
     target_link_libraries(MathTests PRIVATE KairoMath Catch2::Catch2WithMain)
+    add_test(NAME KairoMath.MathTests COMMAND MathTests)
 
 endif()
 
