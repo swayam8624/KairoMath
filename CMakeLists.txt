@@ -9,6 +9,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(KAIRO_MATH_BUILD_TESTS "Build KairoMath unit tests" ${PROJECT_IS_TOP_LEVEL})
 option(KAIRO_MATH_BUILD_VISUALIZER "Build the standalone KairoMath visual laboratory" ${PROJECT_IS_TOP_LEVEL})
+option(KAIRO_MATH_USE_SCHEDULER "Build optional Tensor execution kernels on KairoScheduler" OFF)
+set(KAIRO_SCHEDULER_DIR "/Users/swayamsingal/Desktop/Programming/Kairo/KairoScheduler" CACHE PATH "Path to KairoScheduler.")
 
 # Compiler options
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
@@ -42,6 +44,21 @@ target_sources(KairoMath
             Probability.cppm
             KairoMath.cppm
 )
+
+if(KAIRO_MATH_USE_SCHEDULER)
+    if(NOT EXISTS "${KAIRO_SCHEDULER_DIR}/CMakeLists.txt")
+        message(FATAL_ERROR "KAIRO_MATH_USE_SCHEDULER is ON, but KairoScheduler was not found at: ${KAIRO_SCHEDULER_DIR}")
+    endif()
+    add_subdirectory("${KAIRO_SCHEDULER_DIR}" "${CMAKE_BINARY_DIR}/KairoScheduler")
+    target_sources(KairoMath PUBLIC FILE_SET CXX_MODULES
+        BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}
+        FILES TensorExecution.cppm)
+    target_link_libraries(KairoMath PUBLIC KairoScheduler)
+
+    add_executable(TensorExecutionSmoke tests/TensorExecutionSmoke.cpp)
+    target_link_libraries(TensorExecutionSmoke PRIVATE KairoMath KairoScheduler)
+    add_test(NAME KairoMath.TensorExecutionSmoke COMMAND TensorExecutionSmoke)
+endif()
 
 if(KAIRO_MATH_BUILD_TESTS)
     # Catch2 Unit Test Integration

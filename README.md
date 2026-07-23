@@ -389,3 +389,19 @@ DynamicMatrix<double> generator(2, 2, {
 DynamicMatrix<double> rotation = MatrixExponential(generator);
 // rotation ~= [[cos(angle), -sin(angle)], [sin(angle), cos(angle)]]
 ```
+## Optional Tensor Execution Backend
+
+The default build keeps Tensor kernels scalar and deterministic. On a host with
+the sibling `KairoScheduler` checkout, enable the CPU parallel execution module:
+
+```sh
+cmake -S . -B build-scheduler -G Ninja \
+  -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++ \
+  -DKAIRO_MATH_USE_SCHEDULER=ON
+cmake --build build-scheduler
+ctest --test-dir build-scheduler --output-on-failure
+```
+
+`Kairo.Foundation.Math.TensorExecution` provides safe disjoint-range
+`ParallelAdd` and row-partitioned `ParallelMatMul`, while preserving the scalar
+Tensor implementation as the correctness baseline.
