@@ -274,5 +274,19 @@ int main()
     Variable scalar(Tensor<float>({ 1 }, 3.0f), true);
     const Variable squared = Multiply(scalar, scalar);
     squared.Backward();
-    return std::abs(scalar.Gradient()[0] - 6.0f) < 1e-5f ? 0 : 3;
+    if (std::abs(scalar.Gradient()[0] - 6.0f) >= 1e-5f) return 3;
+
+    Variable checkpointInput(Tensor<float>({ 2 }, { 2.0f, -3.0f }), true);
+    std::size_t forwardCalls = 0;
+    const Variable checkpointed = AutogradCheckpoint([&]
+    {
+        ++forwardCalls;
+        return Multiply(checkpointInput, checkpointInput);
+    });
+    checkpointed.Backward(Tensor<float>({ 2 }, { 1.0f, 1.0f }));
+    if (forwardCalls != 2
+        || std::abs(checkpointInput.Gradient()[0] - 4.0f) >= 1e-5f
+        || std::abs(checkpointInput.Gradient()[1] + 6.0f) >= 1e-5f)
+        return 9;
+    return 0;
 }

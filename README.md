@@ -490,3 +490,12 @@ contiguous host tensors. Results are synchronously read back into contiguous
 host tensors and tagged `TensorBackend::GPU`. This establishes verified backend
 dispatch while keeping transfer cost visible; persistent GPU-resident Tensor
 storage and asynchronous execution remain later backend-layer work.
+
+## Tensor Autograd Recompute
+
+`Kairo.Foundation.Math.TensorAutograd` supports scalar reverse mode and explicit
+upstream vector-Jacobian products. `AutogradCheckpoint` evaluates a callback
+once for its output value, drops the callback's interior graph, and rebuilds it
+during backward. Captured variables must outlive the checkpoint. The smoke test
+proves that the callback runs once in forward and once in backward and that its
+recomputed gradients match the analytic result.

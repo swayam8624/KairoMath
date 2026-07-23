@@ -67,6 +67,7 @@ export namespace kairo::foundation::math
     [[nodiscard]] Variable AutogradGELU(const Variable&);
     [[nodiscard]] Variable AutogradMultiHeadCausalAttention(
         const Variable&, const Variable&, const Variable&, std::size_t);
+    [[nodiscard]] Variable AutogradCheckpoint(std::function<Variable()>);
     [[nodiscard]] Variable MeanSquaredLoss(const Variable&, const Tensor<float>&);
     [[nodiscard]] Variable SoftmaxCrossEntropyLoss(const Variable&, const Tensor<float>&);
 
@@ -110,6 +111,15 @@ export namespace kairo::foundation::math
                 throw std::invalid_argument("Backward requires a scalar one-element output.");
             if (!std::isfinite(initialGradient))
                 throw std::invalid_argument("Backward initial gradient must be finite.");
+            Backward(Tensor<float>(state_->value.GetShape(), initialGradient));
+        }
+
+        /// Backpropagates an explicit upstream tensor through non-scalar
+        /// outputs. This is primarily the boundary used by recomputation
+        /// checkpoints and vector-Jacobian products.
+        void Backward(const Tensor<float>& initialGradient) const
+        {
+            ValidateShape(initialGradient, "Backward");
             std::vector<std::shared_ptr<autograd_detail::Node>> topology;
             std::unordered_set<const autograd_detail::Node*> visited;
             std::function<void(const std::shared_ptr<autograd_detail::Node>&)> visit;
@@ -120,8 +130,7 @@ export namespace kairo::foundation::math
                 topology.push_back(node);
             };
             visit(state_);
-            autograd_detail::Accumulate(
-                state_, Tensor<float>(state_->value.GetShape(), initialGradient));
+            autograd_detail::Accumulate(state_, initialGradient);
             for (auto iterator = topology.rbegin(); iterator != topology.rend(); ++iterator)
                 if ((*iterator)->backward && (*iterator)->hasGradient)
                     (*iterator)->backward((*iterator)->gradient);
@@ -189,9 +198,34 @@ export namespace kairo::foundation::math
         friend Variable AutogradGELU(const Variable&);
         friend Variable AutogradMultiHeadCausalAttention(
             const Variable&, const Variable&, const Variable&, std::size_t);
+        friend Variable AutogradCheckpoint(std::function<Variable()>);
         friend Variable MeanSquaredLoss(const Variable&, const Tensor<float>&);
         friend Variable SoftmaxCrossEntropyLoss(const Variable&, const Tensor<float>&);
     };
+
+    /// Evaluates `forward` once for its value, discards that interior graph,
+    /// and rebuilds it only when backward receives an upstream gradient.
+    /// Captured Variables and parameters must outlive the returned Variable.
+    [[nodiscard]]
+    inline Variable AutogradCheckpoint(std::function<Variable()> forward)
+    {
+        if (!forward)
+            throw std::invalid_argument("AutogradCheckpoint requires a forward callback.");
+        Variable evaluated = forward();
+        auto result = std::make_shared<autograd_detail::Node>();
+        result->value = evaluated.Value();
+        result->requiresGradient = evaluated.RequiresGradient();
+        if (result->requiresGradient)
+        {
+            result->backward = [forward = std::move(forward)](
+                const Tensor<float>& upstream)
+            {
+                Variable recomputed = forward();
+                recomputed.Backward(upstream);
+            };
+        }
+        return Variable(std::move(result));
+    }
 
     [[nodiscard]]
     inline Variable Add(const Variable& lhs, const Variable& rhs)
