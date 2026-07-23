@@ -10,7 +10,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(KAIRO_MATH_BUILD_TESTS "Build KairoMath unit tests" ${PROJECT_IS_TOP_LEVEL})
 option(KAIRO_MATH_BUILD_VISUALIZER "Build the standalone KairoMath visual laboratory" ${PROJECT_IS_TOP_LEVEL})
 option(KAIRO_MATH_USE_SCHEDULER "Build optional Tensor execution kernels on KairoScheduler" OFF)
+option(KAIRO_MATH_USE_GPU "Build optional Float32 Tensor execution kernels on KairoGPU" OFF)
 set(KAIRO_SCHEDULER_DIR "/Users/swayamsingal/Desktop/Programming/Kairo/KairoScheduler" CACHE PATH "Path to KairoScheduler.")
+set(KAIRO_GPU_DIR "/Users/swayamsingal/Desktop/Programming/Kairo/KairoGPU" CACHE PATH "Path to KairoGPU.")
 
 # Compiler options
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "GNU")
@@ -58,6 +60,21 @@ if(KAIRO_MATH_USE_SCHEDULER)
     add_executable(TensorExecutionSmoke tests/TensorExecutionSmoke.cpp)
     target_link_libraries(TensorExecutionSmoke PRIVATE KairoMath KairoScheduler)
     add_test(NAME KairoMath.TensorExecutionSmoke COMMAND TensorExecutionSmoke)
+endif()
+
+if(KAIRO_MATH_USE_GPU)
+    if(NOT EXISTS "${KAIRO_GPU_DIR}/CMakeLists.txt")
+        message(FATAL_ERROR "KAIRO_MATH_USE_GPU is ON, but KairoGPU was not found at: ${KAIRO_GPU_DIR}")
+    endif()
+    add_subdirectory("${KAIRO_GPU_DIR}" "${CMAKE_BINARY_DIR}/KairoGPU")
+    target_sources(KairoMath PUBLIC FILE_SET CXX_MODULES
+        BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}
+        FILES TensorGPU.cppm)
+    target_link_libraries(KairoMath PUBLIC KairoGPU)
+
+    add_executable(TensorGPUSmoke tests/TensorGPUSmoke.cpp)
+    target_link_libraries(TensorGPUSmoke PRIVATE KairoMath KairoGPU)
+    add_test(NAME KairoMath.TensorGPUSmoke COMMAND TensorGPUSmoke)
 endif()
 
 if(KAIRO_MATH_BUILD_TESTS)

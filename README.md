@@ -398,7 +398,7 @@ DynamicMatrix<double> generator(2, 2, {
 DynamicMatrix<double> rotation = MatrixExponential(generator);
 // rotation ~= [[cos(angle), -sin(angle)], [sin(angle), cos(angle)]]
 ```
-## Optional Tensor Execution Backend
+## Optional Tensor Execution Backends
 
 The default build keeps Tensor kernels scalar and deterministic. On a host with
 the sibling `KairoScheduler` checkout, enable the CPU parallel execution module:
@@ -414,3 +414,23 @@ ctest --test-dir build-scheduler --output-on-failure
 `Kairo.Foundation.Math.TensorExecution` provides safe disjoint-range
 `ParallelAdd` and row-partitioned `ParallelMatMul`, while preserving the scalar
 Tensor implementation as the correctness baseline.
+
+On Apple platforms with the sibling `KairoGPU` checkout, enable the Metal
+execution bridge:
+
+```sh
+cmake -S . -B build-gpu -G Ninja \
+  -DCMAKE_CXX_COMPILER=/opt/homebrew/opt/llvm/bin/clang++ \
+  -DKAIRO_MATH_USE_GPU=ON \
+  -DKAIRO_MATH_BUILD_TESTS=OFF \
+  -DKAIRO_MATH_BUILD_VISUALIZER=OFF
+cmake --build build-gpu
+ctest --test-dir build-gpu --output-on-failure
+```
+
+`Kairo.Foundation.Math.TensorGPU` provides explicit Float32 Tensor addition and
+matrix multiplication through a supplied `KairoGPU::Device`. Inputs must be
+contiguous host tensors. Results are synchronously read back into contiguous
+host tensors and tagged `TensorBackend::GPU`. This establishes verified backend
+dispatch while keeping transfer cost visible; persistent GPU-resident Tensor
+storage and asynchronous execution remain later backend-layer work.
