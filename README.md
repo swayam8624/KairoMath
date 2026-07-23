@@ -457,9 +457,13 @@ cmake --build build-scheduler
 ctest --test-dir build-scheduler --output-on-failure
 ```
 
-`Kairo.Foundation.Math.TensorExecution` provides safe disjoint-range
-`ParallelAdd` and row-partitioned `ParallelMatMul`, while preserving the scalar
-Tensor implementation as the correctness baseline.
+`Kairo.Foundation.Math.TensorExecution` uses KairoScheduler for disjoint work
+and KairoSIMD inside contiguous Float32 ranges. Accelerated operations include
+elementwise add, ReLU, deterministic reduction, packed rank-2 matmul, batched
+matmul, and valid NHWC convolution. Every path is compared with the scalar
+Tensor reference. `TensorExecutionContext` selects scalar or scheduled SIMD
+execution by workload size without exposing scheduler or CPU-feature logic to
+model layers.
 
 On Apple platforms with the sibling `KairoGPU` checkout, enable the Metal
 execution bridge:

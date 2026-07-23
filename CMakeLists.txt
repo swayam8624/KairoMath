@@ -12,6 +12,7 @@ option(KAIRO_MATH_BUILD_VISUALIZER "Build the standalone KairoMath visual labora
 option(KAIRO_MATH_USE_SCHEDULER "Build optional Tensor execution kernels on KairoScheduler" OFF)
 option(KAIRO_MATH_USE_GPU "Build optional Float32 Tensor execution kernels on KairoGPU" OFF)
 set(KAIRO_SCHEDULER_DIR "/Users/swayamsingal/Desktop/Programming/Kairo/KairoScheduler" CACHE PATH "Path to KairoScheduler.")
+set(KAIRO_SIMD_DIR "/Users/swayamsingal/Desktop/Programming/Kairo/KairoSIMD" CACHE PATH "Path to KairoSIMD.")
 set(KAIRO_GPU_DIR "/Users/swayamsingal/Desktop/Programming/Kairo/KairoGPU" CACHE PATH "Path to KairoGPU.")
 
 # Compiler options
@@ -70,13 +71,17 @@ if(KAIRO_MATH_USE_SCHEDULER)
         message(FATAL_ERROR "KAIRO_MATH_USE_SCHEDULER is ON, but KairoScheduler was not found at: ${KAIRO_SCHEDULER_DIR}")
     endif()
     add_subdirectory("${KAIRO_SCHEDULER_DIR}" "${CMAKE_BINARY_DIR}/KairoScheduler")
+    if(NOT EXISTS "${KAIRO_SIMD_DIR}/CMakeLists.txt")
+        message(FATAL_ERROR "KAIRO_MATH_USE_SCHEDULER is ON, but KairoSIMD was not found at: ${KAIRO_SIMD_DIR}")
+    endif()
+    add_subdirectory("${KAIRO_SIMD_DIR}" "${CMAKE_BINARY_DIR}/KairoSIMD")
     target_sources(KairoMath PUBLIC FILE_SET CXX_MODULES
         BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}
         FILES TensorExecution.cppm)
-    target_link_libraries(KairoMath PUBLIC KairoScheduler)
+    target_link_libraries(KairoMath PUBLIC KairoScheduler KairoSIMD)
 
     add_executable(TensorExecutionSmoke tests/TensorExecutionSmoke.cpp)
-    target_link_libraries(TensorExecutionSmoke PRIVATE KairoMath KairoScheduler)
+    target_link_libraries(TensorExecutionSmoke PRIVATE KairoMath KairoScheduler KairoSIMD)
     add_test(NAME KairoMath.TensorExecutionSmoke COMMAND TensorExecutionSmoke)
 endif()
 
