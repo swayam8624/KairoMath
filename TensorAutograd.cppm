@@ -1,9 +1,12 @@
 module;
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <limits>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <unordered_set>
@@ -59,6 +62,11 @@ export namespace kairo::foundation::math
         const Variable&, std::size_t, std::size_t, std::size_t, std::size_t);
     [[nodiscard]] Variable AutogradLayerNormLastDim(const Variable&, float);
     [[nodiscard]] Variable AutogradRMSNormLastDim(const Variable&, float);
+    [[nodiscard]] Variable AutogradGatherRows(
+        const Variable&, std::span<const std::size_t>);
+    [[nodiscard]] Variable AutogradGELU(const Variable&);
+    [[nodiscard]] Variable AutogradMultiHeadCausalAttention(
+        const Variable&, const Variable&, const Variable&, std::size_t);
     [[nodiscard]] Variable MeanSquaredLoss(const Variable&, const Tensor<float>&);
     [[nodiscard]] Variable SoftmaxCrossEntropyLoss(const Variable&, const Tensor<float>&);
 
@@ -176,6 +184,11 @@ export namespace kairo::foundation::math
             const Variable&, std::size_t, std::size_t, std::size_t, std::size_t);
         friend Variable AutogradLayerNormLastDim(const Variable&, float);
         friend Variable AutogradRMSNormLastDim(const Variable&, float);
+        friend Variable AutogradGatherRows(
+            const Variable&, std::span<const std::size_t>);
+        friend Variable AutogradGELU(const Variable&);
+        friend Variable AutogradMultiHeadCausalAttention(
+            const Variable&, const Variable&, const Variable&, std::size_t);
         friend Variable MeanSquaredLoss(const Variable&, const Tensor<float>&);
         friend Variable SoftmaxCrossEntropyLoss(const Variable&, const Tensor<float>&);
     };
@@ -522,6 +535,199 @@ export namespace kairo::foundation::math
                                 - normalized[group * width + column] * projectedMean);
                 }
                 autograd_detail::Accumulate(parent, gradient);
+            };
+        }
+        return Variable(std::move(result));
+    }
+
+    /// Input: trainable [rowCount,width] table and row indices.
+    /// Output: [indices.size(),width] gathered rows. Backward scatter-adds,
+    /// correctly accumulating repeated token ids.
+    [[nodiscard]]
+    inline Variable AutogradGatherRows(
+        const Variable& table, std::span<const std::size_t> indices)
+    {
+        if (table.Value().Rank() != 2 || indices.empty())
+            throw std::invalid_argument("AutogradGatherRows expects a rank-2 table and indices.");
+        std::vector<std::size_t> captured(indices.begin(), indices.end());
+        Tensor<float> value({ captured.size(), table.Value().Dim(1) }, 0.0f);
+        for (std::size_t row = 0; row < captured.size(); ++row)
+        {
+            if (captured[row] >= table.Value().Dim(0))
+                throw std::out_of_range("AutogradGatherRows index exceeds table rows.");
+            for (std::size_t column = 0; column < table.Value().Dim(1); ++column)
+                value(row, column) = table.Value()(captured[row], column);
+        }
+        auto result = std::make_shared<autograd_detail::Node>();
+        result->value = std::move(value);
+        result->requiresGradient = table.RequiresGradient();
+        if (result->requiresGradient)
+        {
+            result->parents = { table.state_ };
+            const auto parent = table.state_;
+            result->backward = [parent, captured = std::move(captured)](
+                const Tensor<float>& upstream)
+            {
+                Tensor<float> gradient(parent->value.GetShape(), 0.0f);
+                for (std::size_t row = 0; row < captured.size(); ++row)
+                    for (std::size_t column = 0; column < upstream.Dim(1); ++column)
+                        gradient(captured[row], column) += upstream(row, column);
+                autograd_detail::Accumulate(parent, gradient);
+            };
+        }
+        return Variable(std::move(result));
+    }
+
+    /// Exact erf GELU used by transformer feed-forward blocks.
+    [[nodiscard]]
+    inline Variable AutogradGELU(const Variable& input)
+    {
+        auto result = std::make_shared<autograd_detail::Node>();
+        result->value = input.Value().Map([](float value)
+        {
+            constexpr float localInverseSqrtTwo = 0.7071067811865475244f;
+            return 0.5f * value
+                * (1.0f + std::erf(value * localInverseSqrtTwo));
+        });
+        result->requiresGradient = input.RequiresGradient();
+        if (result->requiresGradient)
+        {
+            result->parents = { input.state_ };
+            const auto parent = input.state_;
+            result->backward = [parent](const Tensor<float>& upstream)
+            {
+                constexpr float localInverseSqrtTwo = 0.7071067811865475244f;
+                constexpr float inverseSqrtTwoPi = 0.39894228040143267794f;
+                Tensor<float> gradient(parent->value.GetShape(), 0.0f);
+                for (std::size_t index = 0; index < gradient.Size(); ++index)
+                {
+                    const float value = parent->value[index];
+                    const float derivative =
+                        0.5f * (1.0f + std::erf(value * localInverseSqrtTwo))
+                        + value * inverseSqrtTwoPi * std::exp(-0.5f * value * value);
+                    gradient[index] = upstream[index] * derivative;
+                }
+                autograd_detail::Accumulate(parent, gradient);
+            };
+        }
+        return Variable(std::move(result));
+    }
+
+    /// Input: matching Q/K/V [sequence,modelWidth] and head count.
+    /// Output: causal multi-head attention in packed head layout.
+    /// Backward computes exact gradients through value mixing, stable softmax,
+    /// score scaling, and query/key dot products.
+    [[nodiscard]]
+    inline Variable AutogradMultiHeadCausalAttention(
+        const Variable& query,
+        const Variable& key,
+        const Variable& value,
+        std::size_t headCount)
+    {
+        if (query.Value().Rank() != 2 || key.Value().Rank() != 2
+            || value.Value().Rank() != 2 || headCount == 0
+            || query.Value().Dim(0) == 0 || query.Value().Dim(1) % headCount != 0
+            || key.Value().Dim(0) != query.Value().Dim(0)
+            || key.Value().Dim(1) != query.Value().Dim(1)
+            || value.Value().Dim(0) != query.Value().Dim(0)
+            || value.Value().Dim(1) != query.Value().Dim(1))
+            throw std::invalid_argument(
+                "AutogradMultiHeadCausalAttention expects matching [sequence,width] tensors.");
+        const std::size_t sequence = query.Value().Dim(0);
+        const std::size_t headWidth = query.Value().Dim(1) / headCount;
+        const float inverseScale = 1.0f / std::sqrt(static_cast<float>(headWidth));
+        Tensor<float> output(query.Value().GetShape(), 0.0f);
+        Tensor<float> probabilities({ headCount, sequence, sequence }, 0.0f);
+        std::vector<float> scores(sequence);
+        for (std::size_t head = 0; head < headCount; ++head)
+            for (std::size_t row = 0; row < sequence; ++row)
+            {
+                float maximum = -std::numeric_limits<float>::infinity();
+                for (std::size_t column = 0; column <= row; ++column)
+                {
+                    float score = 0.0f;
+                    for (std::size_t channel = 0; channel < headWidth; ++channel)
+                    {
+                        const std::size_t packed = head * headWidth + channel;
+                        score += query.Value()(row, packed) * key.Value()(column, packed);
+                    }
+                    scores[column] = score * inverseScale;
+                    maximum = std::max(maximum, scores[column]);
+                }
+                float denominator = 0.0f;
+                for (std::size_t column = 0; column <= row; ++column)
+                {
+                    scores[column] = std::exp(scores[column] - maximum);
+                    denominator += scores[column];
+                }
+                for (std::size_t column = 0; column <= row; ++column)
+                {
+                    const float probability = scores[column] / denominator;
+                    probabilities.At({ head, row, column }) = probability;
+                    for (std::size_t channel = 0; channel < headWidth; ++channel)
+                    {
+                        const std::size_t packed = head * headWidth + channel;
+                        output(row, packed) += probability * value.Value()(column, packed);
+                    }
+                }
+            }
+
+        auto result = std::make_shared<autograd_detail::Node>();
+        result->value = std::move(output);
+        result->requiresGradient = query.RequiresGradient()
+            || key.RequiresGradient() || value.RequiresGradient();
+        if (result->requiresGradient)
+        {
+            result->parents = { query.state_, key.state_, value.state_ };
+            const auto queryState = query.state_;
+            const auto keyState = key.state_;
+            const auto valueState = value.state_;
+            result->backward = [
+                queryState, keyState, valueState, probabilities,
+                headCount, sequence, headWidth, inverseScale
+            ](const Tensor<float>& upstream)
+            {
+                Tensor<float> queryGradient(queryState->value.GetShape(), 0.0f);
+                Tensor<float> keyGradient(keyState->value.GetShape(), 0.0f);
+                Tensor<float> valueGradient(valueState->value.GetShape(), 0.0f);
+                std::vector<float> probabilityGradient(sequence, 0.0f);
+                std::vector<float> scoreGradient(sequence, 0.0f);
+                for (std::size_t head = 0; head < headCount; ++head)
+                    for (std::size_t row = 0; row < sequence; ++row)
+                    {
+                        float projected = 0.0f;
+                        for (std::size_t column = 0; column <= row; ++column)
+                        {
+                            float gradient = 0.0f;
+                            for (std::size_t channel = 0; channel < headWidth; ++channel)
+                            {
+                                const std::size_t packed = head * headWidth + channel;
+                                gradient += upstream(row, packed)
+                                    * valueState->value(column, packed);
+                                valueGradient(column, packed) +=
+                                    probabilities.At({ head, row, column })
+                                    * upstream(row, packed);
+                            }
+                            probabilityGradient[column] = gradient;
+                            projected += probabilities.At({ head, row, column }) * gradient;
+                        }
+                        for (std::size_t column = 0; column <= row; ++column)
+                            scoreGradient[column] =
+                                probabilities.At({ head, row, column })
+                                * (probabilityGradient[column] - projected);
+                        for (std::size_t column = 0; column <= row; ++column)
+                            for (std::size_t channel = 0; channel < headWidth; ++channel)
+                            {
+                                const std::size_t packed = head * headWidth + channel;
+                                queryGradient(row, packed) += scoreGradient[column]
+                                    * keyState->value(column, packed) * inverseScale;
+                                keyGradient(column, packed) += scoreGradient[column]
+                                    * queryState->value(row, packed) * inverseScale;
+                            }
+                    }
+                autograd_detail::Accumulate(queryState, queryGradient);
+                autograd_detail::Accumulate(keyState, keyGradient);
+                autograd_detail::Accumulate(valueState, valueGradient);
             };
         }
         return Variable(std::move(result));

@@ -108,6 +108,12 @@ finite differences, verifies max-pool routing, trains a two-layer nonlinear XOR
 classifier, and trains a small convolutional image classifier to full accuracy
 using Tensor-owned parameters and SGD.
 
+Transformer-oriented differentiable operators include exact-erf GELU,
+embedding row gather with repeated-index scatter-add backward, and packed
+multi-head causal attention. Causal-attention backward differentiates value
+mixing, stable softmax, score scaling, and query/key projections; its query
+gradient is checked against central finite differences.
+
 `Kairo.Foundation.Math.TensorTraining` adds reusable stateful SGD, Momentum,
 Nesterov, RMSProp, Adam, and AdamW optimizers. It supports global gradient-norm
 clipping, coupled or decoupled weight decay, warmup, constant, step-decay, and

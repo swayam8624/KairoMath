@@ -97,6 +97,67 @@ int main()
         }
     }
 
+    Variable embeddingTable(Tensor<float>({ 2, 2 }, {
+        1.0f, -2.0f,
+        0.5f, 3.0f
+    }), true);
+    const std::size_t gatheredRows[] = { 0, 1, 0 };
+    const Variable gathered = AutogradGatherRows(embeddingTable, gatheredRows);
+    MeanSquaredLoss(gathered, Tensor<float>({ 3, 2 }, 0.0f)).Backward();
+    if (std::abs(embeddingTable.Gradient()(0, 0) - 4.0f / 6.0f) > 1e-6f
+        || std::abs(embeddingTable.Gradient()(0, 1) + 8.0f / 6.0f) > 1e-6f
+        || std::abs(embeddingTable.Gradient()(1, 0) - 1.0f / 6.0f) > 1e-6f)
+        return 11;
+
+    const Tensor<float> attentionQueryBase({ 3, 4 }, {
+        0.2f, -0.1f, 0.4f, 0.3f,
+        -0.3f, 0.5f, 0.1f, -0.2f,
+        0.6f, 0.2f, -0.4f, 0.7f
+    });
+    const Tensor<float> attentionKey({ 3, 4 }, {
+        0.1f, 0.4f, -0.2f, 0.3f,
+        0.5f, -0.3f, 0.6f, 0.2f,
+        -0.4f, 0.7f, 0.1f, -0.5f
+    });
+    const Tensor<float> attentionValue({ 3, 4 }, {
+        0.7f, 0.1f, -0.3f, 0.5f,
+        -0.2f, 0.6f, 0.4f, -0.1f,
+        0.3f, -0.5f, 0.8f, 0.2f
+    });
+    const Tensor<float> attentionTarget({ 3, 4 }, {
+        0.2f, 0.0f, -0.1f, 0.3f,
+        0.1f, 0.4f, 0.2f, -0.2f,
+        -0.3f, 0.2f, 0.5f, 0.1f
+    });
+    Variable attentionQuery(attentionQueryBase, true);
+    const Variable attentionOutput = AutogradMultiHeadCausalAttention(
+        attentionQuery, Variable(attentionKey), Variable(attentionValue), 2);
+    MeanSquaredLoss(attentionOutput, attentionTarget).Backward();
+    for (std::size_t index = 0; index < attentionQueryBase.Size(); ++index)
+    {
+        Tensor<float> positive = attentionQueryBase.Contiguous();
+        Tensor<float> negative = attentionQueryBase.Contiguous();
+        positive[index] += epsilon;
+        negative[index] -= epsilon;
+        const float positiveLoss = MeanSquaredError(
+            AutogradMultiHeadCausalAttention(
+                Variable(positive), Variable(attentionKey), Variable(attentionValue), 2).Value(),
+            attentionTarget);
+        const float negativeLoss = MeanSquaredError(
+            AutogradMultiHeadCausalAttention(
+                Variable(negative), Variable(attentionKey), Variable(attentionValue), 2).Value(),
+            attentionTarget);
+        const float numerical = (positiveLoss - negativeLoss) / (2.0f * epsilon);
+        if (std::abs(numerical - attentionQuery.Gradient()[index]) > 5e-4f) return 12;
+    }
+
+    Variable geluInput(Tensor<float>({ 3 }, { -1.0f, 0.0f, 2.0f }), true);
+    MeanSquaredLoss(
+        AutogradGELU(geluInput), Tensor<float>({ 3 }, 0.0f)).Backward();
+    if (!(geluInput.Gradient()[0] > 0.0f
+        && geluInput.Gradient()[1] == 0.0f
+        && geluInput.Gradient()[2] > 0.0f)) return 13;
+
     const Tensor<float> inputs({ 4, 2 }, {
         0, 0,
         0, 1,
