@@ -89,11 +89,15 @@ kernel dispatch.
 `Kairo.Foundation.Math.TensorAutograd` provides dynamic reverse-mode graphs over
 Float32 Tensor values. The implemented differentiable surface includes
 elementwise add/multiply, row-bias broadcasting, matrix multiplication, ReLU,
-mean-squared loss, and stable softmax cross-entropy. Gradients accumulate
-additively into trainable leaves until `ZeroGradient()` is called; `Backward()`
-requires a one-element scalar loss. The validation suite compares matmul/MSE
-gradients with central finite differences and trains a two-layer nonlinear XOR
-classifier to full accuracy using Tensor-owned parameters and SGD.
+reshape, valid NHWC convolution with OHWI filters, valid NHWC max pooling,
+mean-squared loss, and stable softmax cross-entropy. Max-pool backward routes a
+tie to the first row-major maximum and accumulates overlapping-window
+contributions. Gradients accumulate additively into trainable leaves until
+`ZeroGradient()` is called; `Backward()` requires a one-element scalar loss.
+The validation suite compares dense and convolution gradients with central
+finite differences, verifies max-pool routing, trains a two-layer nonlinear XOR
+classifier, and trains a small convolutional image classifier to full accuracy
+using Tensor-owned parameters and SGD.
 
 All types, constants, and math functions live inside the C++ namespace:
 ```cpp

@@ -51,6 +51,11 @@ export namespace kairo::foundation::math
     [[nodiscard]] Variable Multiply(const Variable&, const Variable&);
     [[nodiscard]] Variable AutogradMatMul(const Variable&, const Variable&);
     [[nodiscard]] Variable AutogradReLU(const Variable&);
+    [[nodiscard]] Variable AutogradReshape(const Variable&, Tensor<float>::Shape);
+    [[nodiscard]] Variable AutogradConv2DValidNHWC(
+        const Variable&, const Variable&, std::size_t, std::size_t);
+    [[nodiscard]] Variable AutogradMaxPool2DValidNHWC(
+        const Variable&, std::size_t, std::size_t, std::size_t, std::size_t);
     [[nodiscard]] Variable MeanSquaredLoss(const Variable&, const Tensor<float>&);
     [[nodiscard]] Variable SoftmaxCrossEntropyLoss(const Variable&, const Tensor<float>&);
 
@@ -125,6 +130,11 @@ export namespace kairo::foundation::math
         friend Variable Multiply(const Variable&, const Variable&);
         friend Variable AutogradMatMul(const Variable&, const Variable&);
         friend Variable AutogradReLU(const Variable&);
+        friend Variable AutogradReshape(const Variable&, Tensor<float>::Shape);
+        friend Variable AutogradConv2DValidNHWC(
+            const Variable&, const Variable&, std::size_t, std::size_t);
+        friend Variable AutogradMaxPool2DValidNHWC(
+            const Variable&, std::size_t, std::size_t, std::size_t, std::size_t);
         friend Variable MeanSquaredLoss(const Variable&, const Tensor<float>&);
         friend Variable SoftmaxCrossEntropyLoss(const Variable&, const Tensor<float>&);
     };
@@ -259,6 +269,124 @@ export namespace kairo::foundation::math
                 Tensor<float> gradient(parent->value.GetShape(), 0.0f);
                 for (std::size_t index = 0; index < gradient.Size(); ++index)
                     gradient[index] = parent->value[index] > 0.0f ? upstream[index] : 0.0f;
+                autograd_detail::Accumulate(parent, gradient);
+            };
+        }
+        return Variable(std::move(result));
+    }
+
+    [[nodiscard]]
+    inline Variable AutogradReshape(const Variable& input, Tensor<float>::Shape shape)
+    {
+        auto result = std::make_shared<autograd_detail::Node>();
+        result->value = input.Value().Reshape(shape);
+        result->requiresGradient = input.RequiresGradient();
+        if (result->requiresGradient)
+        {
+            result->parents = { input.state_ };
+            const auto parent = input.state_;
+            result->backward = [parent](const Tensor<float>& upstream)
+            {
+                autograd_detail::Accumulate(parent, upstream.Reshape(parent->value.GetShape()));
+            };
+        }
+        return Variable(std::move(result));
+    }
+
+    /// Input: NHWC activations and OHWI filters using valid convolution.
+    /// Output: NHWC activations with gradients for both inputs and filters.
+    [[nodiscard]]
+    inline Variable AutogradConv2DValidNHWC(
+        const Variable& input,
+        const Variable& filters,
+        std::size_t strideHeight = 1,
+        std::size_t strideWidth = 1)
+    {
+        auto result = std::make_shared<autograd_detail::Node>();
+        result->value = Conv2DValidNHWC(input.Value(), filters.Value(), strideHeight, strideWidth);
+        result->requiresGradient = input.RequiresGradient() || filters.RequiresGradient();
+        if (result->requiresGradient)
+        {
+            result->parents = { input.state_, filters.state_ };
+            const auto inputState = input.state_;
+            const auto filterState = filters.state_;
+            result->backward = [inputState, filterState, strideHeight, strideWidth](const Tensor<float>& upstream)
+            {
+                Tensor<float> inputGradient(inputState->value.GetShape(), 0.0f);
+                Tensor<float> filterGradient(filterState->value.GetShape(), 0.0f);
+                for (std::size_t batch = 0; batch < upstream.Dim(0); ++batch)
+                    for (std::size_t outputY = 0; outputY < upstream.Dim(1); ++outputY)
+                        for (std::size_t outputX = 0; outputX < upstream.Dim(2); ++outputX)
+                            for (std::size_t outputChannel = 0; outputChannel < upstream.Dim(3); ++outputChannel)
+                            {
+                                const float gradient = upstream.At({ batch, outputY, outputX, outputChannel });
+                                for (std::size_t kernelY = 0; kernelY < filterState->value.Dim(1); ++kernelY)
+                                    for (std::size_t kernelX = 0; kernelX < filterState->value.Dim(2); ++kernelX)
+                                        for (std::size_t channel = 0; channel < inputState->value.Dim(3); ++channel)
+                                        {
+                                            const std::size_t inputY = outputY * strideHeight + kernelY;
+                                            const std::size_t inputX = outputX * strideWidth + kernelX;
+                                            inputGradient.At({ batch, inputY, inputX, channel }) += gradient
+                                                * filterState->value.At({ outputChannel, kernelY, kernelX, channel });
+                                            filterGradient.At({ outputChannel, kernelY, kernelX, channel }) += gradient
+                                                * inputState->value.At({ batch, inputY, inputX, channel });
+                                        }
+                            }
+                autograd_detail::Accumulate(inputState, inputGradient);
+                autograd_detail::Accumulate(filterState, filterGradient);
+            };
+        }
+        return Variable(std::move(result));
+    }
+
+    /// Input: NHWC activations and a valid pooling window/stride.
+    /// Output: pooled NHWC activations. Backward routes each output gradient to
+    /// the first row-major maximum; overlapping windows accumulate.
+    [[nodiscard]]
+    inline Variable AutogradMaxPool2DValidNHWC(
+        const Variable& input,
+        std::size_t windowHeight,
+        std::size_t windowWidth,
+        std::size_t strideHeight = 1,
+        std::size_t strideWidth = 1)
+    {
+        auto result = std::make_shared<autograd_detail::Node>();
+        result->value = MaxPool2DValidNHWC(
+            input.Value(), windowHeight, windowWidth, strideHeight, strideWidth);
+        result->requiresGradient = input.RequiresGradient();
+        if (result->requiresGradient)
+        {
+            result->parents = { input.state_ };
+            const auto parent = input.state_;
+            result->backward = [
+                parent, windowHeight, windowWidth, strideHeight, strideWidth
+            ](const Tensor<float>& upstream)
+            {
+                Tensor<float> gradient(parent->value.GetShape(), 0.0f);
+                for (std::size_t batch = 0; batch < upstream.Dim(0); ++batch)
+                    for (std::size_t outputY = 0; outputY < upstream.Dim(1); ++outputY)
+                        for (std::size_t outputX = 0; outputX < upstream.Dim(2); ++outputX)
+                            for (std::size_t channel = 0; channel < upstream.Dim(3); ++channel)
+                            {
+                                std::size_t maximumY = outputY * strideHeight;
+                                std::size_t maximumX = outputX * strideWidth;
+                                float maximum = parent->value.At({ batch, maximumY, maximumX, channel });
+                                for (std::size_t windowY = 0; windowY < windowHeight; ++windowY)
+                                    for (std::size_t windowX = 0; windowX < windowWidth; ++windowX)
+                                    {
+                                        const std::size_t inputY = outputY * strideHeight + windowY;
+                                        const std::size_t inputX = outputX * strideWidth + windowX;
+                                        const float candidate = parent->value.At({ batch, inputY, inputX, channel });
+                                        if (candidate > maximum)
+                                        {
+                                            maximum = candidate;
+                                            maximumY = inputY;
+                                            maximumX = inputX;
+                                        }
+                                    }
+                                gradient.At({ batch, maximumY, maximumX, channel })
+                                    += upstream.At({ batch, outputY, outputX, channel });
+                            }
                 autograd_detail::Accumulate(parent, gradient);
             };
         }
