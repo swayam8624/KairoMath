@@ -71,6 +71,15 @@ Probability
   ├── Weighted discrete sampling
   └── Mean / Variance / StandardDeviation sample analysis
 ```
+
+### 4. Tensor Visual Kernels
+
+`Kairo.Foundation.Math.Tensor` includes CPU reference kernels for
+`Conv2DValidNHWC` and `MaxPool2DValidNHWC`. Inputs use NHWC layout
+`[batch,height,width,channels]`; convolution filters use OHWI layout
+`[outputChannels,kernelHeight,kernelWidth,inputChannels]`. These explicit
+conventions are the correctness contract for later scheduler, SIMD, and GPU
+kernel dispatch.
 *   **Import Interfaces**:
     ```cpp
     import Kairo.Foundation.Math.Optimization;

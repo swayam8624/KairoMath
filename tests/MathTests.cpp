@@ -58,6 +58,27 @@ TEST_CASE("Vector Project with non-unit axes", "[Vector]")
     }
 }
 
+TEST_CASE("Tensor visual-computing kernels", "[Tensor][Vision]")
+{
+    SECTION("NHWC valid convolution and max pooling preserve explicit layout")
+    {
+        Tensor<float> input({ 1, 3, 3, 1 }, {
+            1.0f, 2.0f, 3.0f,
+            4.0f, 5.0f, 6.0f,
+            7.0f, 8.0f, 9.0f
+        });
+        Tensor<float> filters({ 1, 2, 2, 1 }, { 1.0f, 0.0f, 0.0f, 1.0f });
+        const Tensor<float> convolved = Conv2DValidNHWC(input, filters);
+        REQUIRE(convolved.GetShape() == Tensor<float>::Shape({ 1, 2, 2, 1 }));
+        REQUIRE(convolved.At({ 0, 0, 0, 0 }) == 6.0f);
+        REQUIRE(convolved.At({ 0, 1, 1, 0 }) == 14.0f);
+
+        const Tensor<float> pooled = MaxPool2DValidNHWC(input, 2, 2, 2, 2);
+        REQUIRE(pooled.GetShape() == Tensor<float>::Shape({ 1, 1, 1, 1 }));
+        REQUIRE(pooled.At({ 0, 0, 0, 0 }) == 5.0f);
+    }
+}
+
 TEST_CASE("Vector Refract edge cases", "[Vector]")
 {
     SECTION("Normal incidence no refraction deflection")

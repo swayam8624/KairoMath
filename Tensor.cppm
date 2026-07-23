@@ -848,6 +848,74 @@ export namespace kairo::foundation::math
         return result;
     }
 
+    /// Input: NHWC activations [batch,height,width,inputChannels] and OHWI
+    /// filters [outputChannels,kernelHeight,kernelWidth,inputChannels].
+    /// Output: valid-convolution NHWC activations. This is the CPU reference
+    /// kernel; scheduler/SIMD/GPU backends must preserve these conventions.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    Tensor<T> Conv2DValidNHWC(const Tensor<T>& input, const Tensor<T>& filters,
+        std::size_t strideHeight = 1, std::size_t strideWidth = 1)
+    {
+        if (input.Rank() != 4 || filters.Rank() != 4 || strideHeight == 0 || strideWidth == 0
+            || input.Dim(3) != filters.Dim(3) || filters.Dim(1) == 0 || filters.Dim(2) == 0
+            || input.Dim(1) < filters.Dim(1) || input.Dim(2) < filters.Dim(2))
+        {
+            throw std::invalid_argument("Conv2DValidNHWC expects valid NHWC input, OHWI filters, and non-zero stride.");
+        }
+        const std::size_t outputHeight = (input.Dim(1) - filters.Dim(1)) / strideHeight + 1;
+        const std::size_t outputWidth = (input.Dim(2) - filters.Dim(2)) / strideWidth + 1;
+        Tensor<T> output({ input.Dim(0), outputHeight, outputWidth, filters.Dim(0) }, T(0));
+        for (std::size_t batch = 0; batch < input.Dim(0); ++batch)
+            for (std::size_t outputY = 0; outputY < outputHeight; ++outputY)
+                for (std::size_t outputX = 0; outputX < outputWidth; ++outputX)
+                    for (std::size_t outputChannel = 0; outputChannel < filters.Dim(0); ++outputChannel)
+                    {
+                        T sum = T(0);
+                        for (std::size_t kernelY = 0; kernelY < filters.Dim(1); ++kernelY)
+                            for (std::size_t kernelX = 0; kernelX < filters.Dim(2); ++kernelX)
+                                for (std::size_t channel = 0; channel < input.Dim(3); ++channel)
+                                {
+                                    const std::size_t inY = outputY * strideHeight + kernelY;
+                                    const std::size_t inX = outputX * strideWidth + kernelX;
+                                    sum += input.At({ batch, inY, inX, channel })
+                                        * filters.At({ outputChannel, kernelY, kernelX, channel });
+                                }
+                        output.At({ batch, outputY, outputX, outputChannel }) = sum;
+                    }
+        return output;
+    }
+
+    /// Input: NHWC activation and pooling window/stride dimensions.
+    /// Output: valid max-pooled NHWC activation tensor.
+    template<FloatingPoint T>
+    [[nodiscard]]
+    Tensor<T> MaxPool2DValidNHWC(const Tensor<T>& input,
+        std::size_t windowHeight, std::size_t windowWidth,
+        std::size_t strideHeight = 1, std::size_t strideWidth = 1)
+    {
+        if (input.Rank() != 4 || windowHeight == 0 || windowWidth == 0 || strideHeight == 0 || strideWidth == 0
+            || input.Dim(1) < windowHeight || input.Dim(2) < windowWidth)
+        {
+            throw std::invalid_argument("MaxPool2DValidNHWC expects valid NHWC input and non-zero window/stride.");
+        }
+        const std::size_t outputHeight = (input.Dim(1) - windowHeight) / strideHeight + 1;
+        const std::size_t outputWidth = (input.Dim(2) - windowWidth) / strideWidth + 1;
+        Tensor<T> output({ input.Dim(0), outputHeight, outputWidth, input.Dim(3) });
+        for (std::size_t batch = 0; batch < input.Dim(0); ++batch)
+            for (std::size_t outputY = 0; outputY < outputHeight; ++outputY)
+                for (std::size_t outputX = 0; outputX < outputWidth; ++outputX)
+                    for (std::size_t channel = 0; channel < input.Dim(3); ++channel)
+                    {
+                        T maximum = input.At({ batch, outputY * strideHeight, outputX * strideWidth, channel });
+                        for (std::size_t windowY = 0; windowY < windowHeight; ++windowY)
+                            for (std::size_t windowX = 0; windowX < windowWidth; ++windowX)
+                                maximum = std::max(maximum, input.At({ batch, outputY * strideHeight + windowY, outputX * strideWidth + windowX, channel }));
+                        output.At({ batch, outputY, outputX, channel }) = maximum;
+                    }
+        return output;
+    }
+
     using Tensorf = Tensor<float>;
     using Tensord = Tensor<double>;
     using Tensori = Tensor<int>;
