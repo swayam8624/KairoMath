@@ -532,16 +532,11 @@ export namespace kairo::foundation::math
             return offset;
         }
 
-        template<Arithmetic U>
-        friend Tensor<U> ElementwiseBinary(
-            const Tensor<U>& lhs,
-            const Tensor<U>& rhs,
-            U (*op)(U, U));
     };
 
-    template<Arithmetic T>
+    template<Arithmetic T, typename Fn>
     [[nodiscard]]
-    Tensor<T> ElementwiseBinary(const Tensor<T>& lhs, const Tensor<T>& rhs, T (*op)(T, T))
+    Tensor<T> ElementwiseBinary(const Tensor<T>& lhs, const Tensor<T>& rhs, Fn&& op)
     {
         if (lhs.GetShape() != rhs.GetShape())
         {
