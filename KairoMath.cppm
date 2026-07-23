@@ -8,6 +8,7 @@ export import Kairo.Foundation.Math.DynamicMatrix;
 export import Kairo.Foundation.Math.Tensor;
 export import Kairo.Foundation.Math.TensorAutograd;
 export import Kairo.Foundation.Math.TensorTraining;
+export import Kairo.Foundation.Math.TensorData;
 export import Kairo.Foundation.Math.LinearAlgebra.LinearSolve;
 export import Kairo.Foundation.Math.LinearAlgebra.Decomposition;
 export import Kairo.Foundation.Math.LinearAlgebra.Eigen;

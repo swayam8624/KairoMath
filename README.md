@@ -85,6 +85,7 @@ kernel dispatch.
     import Kairo.Foundation.Math.Tensor;
     import Kairo.Foundation.Math.TensorAutograd;
     import Kairo.Foundation.Math.TensorTraining;
+    import Kairo.Foundation.Math.TensorData;
     ```
 
 `Kairo.Foundation.Math.TensorAutograd` provides dynamic reverse-mode graphs over
@@ -109,6 +110,14 @@ state, and the reproducible `TrainingRandom` state. Loading validates the full
 payload and every shape before mutating live training state. The training smoke
 test proves that interrupted AdamW training resumes bit-for-bit identically to
 an uninterrupted run.
+
+`Kairo.Foundation.Math.TensorData` provides immutable indexed datasets whose
+axis-zero sample ordering can be reproducibly shuffled and split without
+copying source storage. Gathered batches preserve every trailing sample and
+label dimension, support partial or drop-last final batches, and report their
+source indices for auditability. `TensorPrefetchLoader` overlaps bounded
+background gathers with training, propagates worker failures, and uses
+cancellation-safe `std::jthread` teardown.
 
 All types, constants, and math functions live inside the C++ namespace:
 ```cpp
