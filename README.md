@@ -80,6 +80,12 @@ Probability
 `[outputChannels,kernelHeight,kernelWidth,inputChannels]`. These explicit
 conventions are the correctness contract for later scheduler, SIMD, and GPU
 kernel dispatch.
+
+Tensor storage supports Float32, Float64, IEEE Float16, BFloat16, Int8, and
+Int64 index values. `TensorCast` performs explicit value conversion;
+low-precision matrix products accumulate in Float32. `BatchedMatMul` preserves
+arbitrary matching batch dimensions, while `LayerNormLastDim` and
+`RMSNormLastDim` use Float32 statistics for Float16/BFloat16 inputs.
 *   **Import Interfaces**:
     ```cpp
     import Kairo.Foundation.Math.Tensor;
@@ -92,7 +98,8 @@ kernel dispatch.
 Float32 Tensor values. The implemented differentiable surface includes
 elementwise add/multiply, row-bias broadcasting, matrix multiplication, ReLU,
 reshape, valid NHWC convolution with OHWI filters, valid NHWC max pooling,
-mean-squared loss, and stable softmax cross-entropy. Max-pool backward routes a
+LayerNorm, RMSNorm, mean-squared loss, and stable softmax cross-entropy.
+Max-pool backward routes a
 tie to the first row-major maximum and accumulates overlapping-window
 contributions. Gradients accumulate additively into trainable leaves until
 `ZeroGradient()` is called; `Backward()` requires a one-element scalar loss.
@@ -110,6 +117,11 @@ state, and the reproducible `TrainingRandom` state. Loading validates the full
 payload and every shape before mutating live training state. The training smoke
 test proves that interrupted AdamW training resumes bit-for-bit identically to
 an uninterrupted run.
+
+`DynamicLossScaler` seeds scaled reverse passes, unscales once at the optimizer
+boundary, rejects non-finite gradients before parameter mutation, and applies
+configurable growth/backoff. Float32 master parameters remain authoritative
+while Float16/BFloat16 tensors provide low-precision forward storage.
 
 `Kairo.Foundation.Math.TensorData` provides immutable indexed datasets whose
 axis-zero sample ordering can be reproducibly shuffled and split without

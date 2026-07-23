@@ -125,9 +125,11 @@ export namespace kairo::foundation::math
         /// implicit gradient clearing.
         /// Failure: rejects absent gradients, non-trainable variables, shape
         /// drift, non-finite norms, and invalid hyperparameters before mutation.
-        void Step(std::span<Variable*> parameters)
+        void Step(std::span<Variable*> parameters, float gradientDivisor = 1.0f)
         {
             if (parameters.empty()) throw std::invalid_argument("Optimizer Step requires parameters.");
+            if (!(gradientDivisor > 0.0f) || !std::isfinite(gradientDivisor))
+                throw std::invalid_argument("Optimizer gradient divisor must be finite and positive.");
             EnsureState(parameters);
             float squaredNorm = 0.0f;
             for (Variable* parameter : parameters)
@@ -136,7 +138,7 @@ export namespace kairo::foundation::math
                     throw std::logic_error("Optimizer parameters must be trainable and have gradients.");
                 for (std::size_t index = 0; index < parameter->Gradient().Size(); ++index)
                 {
-                    const float gradient = parameter->Gradient()[index];
+                    const float gradient = parameter->Gradient()[index] / gradientDivisor;
                     squaredNorm += gradient * gradient;
                 }
             }
@@ -162,7 +164,8 @@ export namespace kairo::foundation::math
                 Tensor<float>& second = secondMoments_[parameterIndex];
                 for (std::size_t index = 0; index < parameter.Value().Size(); ++index)
                 {
-                    float gradient = parameter.Gradient()[index] * gradientScale;
+                    float gradient =
+                        parameter.Gradient()[index] / gradientDivisor * gradientScale;
                     if (config_.kind != TensorOptimizerKind::AdamW && config_.weightDecay != 0.0f)
                         gradient += config_.weightDecay * parameter.Value()[index];
                     switch (config_.kind)
@@ -285,6 +288,77 @@ export namespace kairo::foundation::math
             }
             ValidateStateShapes(State(), parameters);
         }
+    };
+
+    /// Dynamic loss scaler for Float32-master mixed-precision training.
+    ///
+    /// `Backward` seeds a scaled reverse pass. `Step` rejects non-finite
+    /// gradients without modifying parameters, backs off the scale, and clears
+    /// rejected gradients. Successful steps unscale exactly once inside the
+    /// optimizer and periodically grow the scale.
+    class DynamicLossScaler final
+    {
+    public:
+        explicit DynamicLossScaler(
+            float initialScale = 65'536.0f,
+            float growthFactor = 2.0f,
+            float backoffFactor = 0.5f,
+            std::uint64_t growthInterval = 2'000)
+            : scale_(initialScale),
+              growthFactor_(growthFactor),
+              backoffFactor_(backoffFactor),
+              growthInterval_(growthInterval)
+        {
+            if (!(scale_ >= 1.0f) || !(growthFactor_ > 1.0f)
+                || !(backoffFactor_ > 0.0f && backoffFactor_ < 1.0f)
+                || growthInterval_ == 0)
+                throw std::invalid_argument("DynamicLossScaler configuration is invalid.");
+        }
+
+        [[nodiscard]] float Scale() const noexcept { return scale_; }
+        [[nodiscard]] std::uint64_t ConsecutiveFiniteSteps() const noexcept
+        {
+            return finiteSteps_;
+        }
+
+        void Backward(const Variable& scalarLoss) const
+        {
+            scalarLoss.Backward(scale_);
+        }
+
+        [[nodiscard]] bool Step(TensorOptimizer& optimizer, std::span<Variable*> parameters)
+        {
+            bool finite = true;
+            for (Variable* parameter : parameters)
+            {
+                if (!parameter || !parameter->HasGradient())
+                    throw std::logic_error("Loss scaler requires parameters with gradients.");
+                for (std::size_t index = 0; index < parameter->Gradient().Size(); ++index)
+                    finite = finite && std::isfinite(parameter->Gradient()[index]);
+            }
+            if (!finite)
+            {
+                for (Variable* parameter : parameters) parameter->ZeroGradient();
+                scale_ = std::max(1.0f, scale_ * backoffFactor_);
+                finiteSteps_ = 0;
+                return false;
+            }
+            optimizer.Step(parameters, scale_);
+            ++finiteSteps_;
+            if (finiteSteps_ == growthInterval_)
+            {
+                scale_ *= growthFactor_;
+                finiteSteps_ = 0;
+            }
+            return true;
+        }
+
+    private:
+        float scale_;
+        float growthFactor_;
+        float backoffFactor_;
+        std::uint64_t growthInterval_;
+        std::uint64_t finiteSteps_ = 0;
     };
 
     /// Small reproducible generator whose complete state is checkpointable.

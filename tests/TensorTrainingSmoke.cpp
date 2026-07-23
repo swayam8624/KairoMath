@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
+#include <limits>
 
 import Kairo.Foundation.Math.Tensor;
 import Kairo.Foundation.Math.TensorAutograd;
@@ -101,5 +102,33 @@ int main()
     if (resumedState.firstMoments[0][0] != uninterruptedState.firstMoments[0][0]
         || resumedState.secondMoments[0][0] != uninterruptedState.secondMoments[0][0])
         return 4;
+
+    TensorOptimizerConfig scaledConfig;
+    scaledConfig.kind = TensorOptimizerKind::SGD;
+    scaledConfig.schedule.baseRate = 0.1f;
+    Variable regular(Tensor<float>({ 1 }, 2.0f), true);
+    Variable scaled(Tensor<float>({ 1 }, 2.0f), true);
+    TensorOptimizer regularOptimizer(scaledConfig);
+    TensorOptimizer scaledOptimizer(scaledConfig);
+    MeanSquaredLoss(regular, Tensor<float>({ 1 }, 0.5f)).Backward();
+    std::array<Variable*, 1> regularParameters{ &regular };
+    regularOptimizer.Step(regularParameters);
+    const Variable scaledLoss = MeanSquaredLoss(scaled, Tensor<float>({ 1 }, 0.5f));
+    DynamicLossScaler scaler(1'024.0f, 2.0f, 0.5f, 2);
+    scaler.Backward(scaledLoss);
+    std::array<Variable*, 1> scaledParameters{ &scaled };
+    if (!scaler.Step(scaledOptimizer, scaledParameters)
+        || scaled.Value()[0] != regular.Value()[0]) return 5;
+
+    Variable overflowing(
+        Tensor<float>({ 1 }, std::numeric_limits<float>::max()), true);
+    const Variable overflowLoss =
+        MeanSquaredLoss(overflowing, Tensor<float>({ 1 }, 0.0f));
+    scaler.Backward(overflowLoss);
+    std::array<Variable*, 1> overflowParameters{ &overflowing };
+    const float beforeOverflow = overflowing.Value()[0];
+    if (scaler.Step(scaledOptimizer, overflowParameters)
+        || overflowing.Value()[0] != beforeOverflow || scaler.Scale() != 512.0f)
+        return 6;
     return 0;
 }

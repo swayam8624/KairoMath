@@ -64,6 +64,39 @@ int main()
         if (std::abs(poolingInput.Gradient()[index] - expected) > 1e-6f) return 6;
     }
 
+    const Tensor<float> normalizationBase({ 2, 3 }, {
+        0.2f, -0.7f, 1.1f,
+        0.4f, 0.9f, -0.3f
+    });
+    const Tensor<float> normalizationTarget({ 2, 3 }, {
+        -0.3f, 0.1f, 0.7f,
+        0.5f, -0.2f, 0.4f
+    });
+    for (const bool rms : { false, true })
+    {
+        Variable normalizationInput(normalizationBase, true);
+        const Variable normalized = rms
+            ? AutogradRMSNormLastDim(normalizationInput, 1e-5f)
+            : AutogradLayerNormLastDim(normalizationInput, 1e-5f);
+        MeanSquaredLoss(normalized, normalizationTarget).Backward();
+        for (std::size_t index = 0; index < normalizationBase.Size(); ++index)
+        {
+            Tensor<float> positive = normalizationBase.Contiguous();
+            Tensor<float> negative = normalizationBase.Contiguous();
+            positive[index] += epsilon;
+            negative[index] -= epsilon;
+            const Tensor<float> positiveOutput = rms
+                ? RMSNormLastDim(positive, 1e-5f) : LayerNormLastDim(positive, 1e-5f);
+            const Tensor<float> negativeOutput = rms
+                ? RMSNormLastDim(negative, 1e-5f) : LayerNormLastDim(negative, 1e-5f);
+            const float numerical = (
+                MeanSquaredError(positiveOutput, normalizationTarget)
+                - MeanSquaredError(negativeOutput, normalizationTarget)) / (2.0f * epsilon);
+            if (std::abs(numerical - normalizationInput.Gradient()[index]) > 4e-4f)
+                return rms ? 10 : 9;
+        }
+    }
+
     const Tensor<float> inputs({ 4, 2 }, {
         0, 0,
         0, 1,

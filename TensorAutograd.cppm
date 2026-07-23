@@ -57,6 +57,8 @@ export namespace kairo::foundation::math
         const Variable&, const Variable&, std::size_t, std::size_t);
     [[nodiscard]] Variable AutogradMaxPool2DValidNHWC(
         const Variable&, std::size_t, std::size_t, std::size_t, std::size_t);
+    [[nodiscard]] Variable AutogradLayerNormLastDim(const Variable&, float);
+    [[nodiscard]] Variable AutogradRMSNormLastDim(const Variable&, float);
     [[nodiscard]] Variable MeanSquaredLoss(const Variable&, const Tensor<float>&);
     [[nodiscard]] Variable SoftmaxCrossEntropyLoss(const Variable&, const Tensor<float>&);
 
@@ -94,10 +96,12 @@ export namespace kairo::foundation::math
         /// Output: gradients accumulated into every reachable trainable leaf.
         /// Task: execute a fresh reverse topological traversal. Call
         /// `ZeroGradient` explicitly when accumulation across steps is unwanted.
-        void Backward() const
+        void Backward(float initialGradient = 1.0f) const
         {
             if (state_->value.Size() != 1)
                 throw std::invalid_argument("Backward requires a scalar one-element output.");
+            if (!std::isfinite(initialGradient))
+                throw std::invalid_argument("Backward initial gradient must be finite.");
             std::vector<std::shared_ptr<autograd_detail::Node>> topology;
             std::unordered_set<const autograd_detail::Node*> visited;
             std::function<void(const std::shared_ptr<autograd_detail::Node>&)> visit;
@@ -108,7 +112,8 @@ export namespace kairo::foundation::math
                 topology.push_back(node);
             };
             visit(state_);
-            autograd_detail::Accumulate(state_, Tensor<float>(state_->value.GetShape(), 1.0f));
+            autograd_detail::Accumulate(
+                state_, Tensor<float>(state_->value.GetShape(), initialGradient));
             for (auto iterator = topology.rbegin(); iterator != topology.rend(); ++iterator)
                 if ((*iterator)->backward && (*iterator)->hasGradient)
                     (*iterator)->backward((*iterator)->gradient);
@@ -169,6 +174,8 @@ export namespace kairo::foundation::math
             const Variable&, const Variable&, std::size_t, std::size_t);
         friend Variable AutogradMaxPool2DValidNHWC(
             const Variable&, std::size_t, std::size_t, std::size_t, std::size_t);
+        friend Variable AutogradLayerNormLastDim(const Variable&, float);
+        friend Variable AutogradRMSNormLastDim(const Variable&, float);
         friend Variable MeanSquaredLoss(const Variable&, const Tensor<float>&);
         friend Variable SoftmaxCrossEntropyLoss(const Variable&, const Tensor<float>&);
     };
@@ -421,6 +428,99 @@ export namespace kairo::foundation::math
                                 gradient.At({ batch, maximumY, maximumX, channel })
                                     += upstream.At({ batch, outputY, outputX, channel });
                             }
+                autograd_detail::Accumulate(parent, gradient);
+            };
+        }
+        return Variable(std::move(result));
+    }
+
+    /// Input: Float32 activations grouped by their final dimension.
+    /// Output: normalized activations with the exact LayerNorm input gradient.
+    [[nodiscard]]
+    inline Variable AutogradLayerNormLastDim(const Variable& input, float epsilon = 1e-5f)
+    {
+        auto result = std::make_shared<autograd_detail::Node>();
+        result->value = LayerNormLastDim(input.Value(), epsilon);
+        result->requiresGradient = input.RequiresGradient();
+        if (result->requiresGradient)
+        {
+            result->parents = { input.state_ };
+            const auto parent = input.state_;
+            const Tensor<float> normalized = result->value.Contiguous();
+            result->backward = [parent, normalized, epsilon](const Tensor<float>& upstream)
+            {
+                const std::size_t width = parent->value.Dim(parent->value.Rank() - 1);
+                const std::size_t groups = parent->value.Size() / width;
+                Tensor<float> gradient(parent->value.GetShape(), 0.0f);
+                for (std::size_t group = 0; group < groups; ++group)
+                {
+                    float mean = 0.0f;
+                    for (std::size_t column = 0; column < width; ++column)
+                        mean += parent->value[group * width + column];
+                    mean /= static_cast<float>(width);
+                    float variance = 0.0f;
+                    float upstreamSum = 0.0f;
+                    float projectedSum = 0.0f;
+                    for (std::size_t column = 0; column < width; ++column)
+                    {
+                        const float centered = parent->value[group * width + column] - mean;
+                        variance += centered * centered;
+                        upstreamSum += upstream[group * width + column];
+                        projectedSum += upstream[group * width + column]
+                            * normalized[group * width + column];
+                    }
+                    const float inverse = 1.0f
+                        / std::sqrt(variance / static_cast<float>(width) + epsilon);
+                    for (std::size_t column = 0; column < width; ++column)
+                        gradient[group * width + column] = inverse
+                            * (upstream[group * width + column]
+                                - upstreamSum / static_cast<float>(width)
+                                - normalized[group * width + column]
+                                    * projectedSum / static_cast<float>(width));
+                }
+                autograd_detail::Accumulate(parent, gradient);
+            };
+        }
+        return Variable(std::move(result));
+    }
+
+    /// Input: Float32 activations grouped by their final dimension.
+    /// Output: RMS-normalized activations with exact input gradients.
+    [[nodiscard]]
+    inline Variable AutogradRMSNormLastDim(const Variable& input, float epsilon = 1e-5f)
+    {
+        auto result = std::make_shared<autograd_detail::Node>();
+        result->value = RMSNormLastDim(input.Value(), epsilon);
+        result->requiresGradient = input.RequiresGradient();
+        if (result->requiresGradient)
+        {
+            result->parents = { input.state_ };
+            const auto parent = input.state_;
+            const Tensor<float> normalized = result->value.Contiguous();
+            result->backward = [parent, normalized, epsilon](const Tensor<float>& upstream)
+            {
+                const std::size_t width = parent->value.Dim(parent->value.Rank() - 1);
+                const std::size_t groups = parent->value.Size() / width;
+                Tensor<float> gradient(parent->value.GetShape(), 0.0f);
+                for (std::size_t group = 0; group < groups; ++group)
+                {
+                    float squares = 0.0f;
+                    float projectedMean = 0.0f;
+                    for (std::size_t column = 0; column < width; ++column)
+                    {
+                        const float value = parent->value[group * width + column];
+                        squares += value * value;
+                        projectedMean += upstream[group * width + column]
+                            * normalized[group * width + column];
+                    }
+                    const float inverse = 1.0f
+                        / std::sqrt(squares / static_cast<float>(width) + epsilon);
+                    projectedMean /= static_cast<float>(width);
+                    for (std::size_t column = 0; column < width; ++column)
+                        gradient[group * width + column] = inverse
+                            * (upstream[group * width + column]
+                                - normalized[group * width + column] * projectedMean);
+                }
                 autograd_detail::Accumulate(parent, gradient);
             };
         }

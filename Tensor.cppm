@@ -2,8 +2,12 @@ module;
 
 #include <algorithm>
 #include <cassert>
+#include <bit>
 #include <cmath>
+#include <compare>
+#include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <initializer_list>
 #include <limits>
 #include <memory>
@@ -11,6 +15,7 @@ module;
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -21,6 +26,134 @@ import Kairo.Foundation.Math.DynamicMatrix;
 
 export namespace kairo::foundation::math
 {
+    namespace tensor_dtype_detail
+    {
+        [[nodiscard]] constexpr std::uint16_t FloatToHalfBits(float value) noexcept
+        {
+            const std::uint32_t bits = std::bit_cast<std::uint32_t>(value);
+            const std::uint32_t sign = (bits >> 16) & 0x8000u;
+            const std::uint32_t exponent = (bits >> 23) & 0xFFu;
+            const std::uint32_t mantissa = bits & 0x7FFFFFu;
+            if (exponent == 0xFFu)
+                return static_cast<std::uint16_t>(
+                    sign | 0x7C00u | (mantissa == 0 ? 0u : 0x0200u));
+            const int halfExponent = static_cast<int>(exponent) - 127 + 15;
+            if (halfExponent >= 31) return static_cast<std::uint16_t>(sign | 0x7C00u);
+            if (halfExponent <= 0)
+            {
+                if (halfExponent < -10) return static_cast<std::uint16_t>(sign);
+                const std::uint32_t normalized = mantissa | 0x800000u;
+                const int shift = 14 - halfExponent;
+                std::uint32_t rounded = normalized >> shift;
+                const std::uint32_t remainder = normalized & ((1u << shift) - 1u);
+                const std::uint32_t halfway = 1u << (shift - 1);
+                if (remainder > halfway || (remainder == halfway && (rounded & 1u))) ++rounded;
+                return static_cast<std::uint16_t>(sign | rounded);
+            }
+            std::uint32_t roundedMantissa = mantissa >> 13;
+            const std::uint32_t remainder = mantissa & 0x1FFFu;
+            if (remainder > 0x1000u || (remainder == 0x1000u && (roundedMantissa & 1u)))
+            {
+                ++roundedMantissa;
+                if (roundedMantissa == 0x400u)
+                    return static_cast<std::uint16_t>(
+                        sign | (static_cast<std::uint32_t>(halfExponent + 1) << 10));
+            }
+            return static_cast<std::uint16_t>(
+                sign | (static_cast<std::uint32_t>(halfExponent) << 10)
+                | (roundedMantissa & 0x3FFu));
+        }
+
+        [[nodiscard]] constexpr float HalfBitsToFloat(std::uint16_t value) noexcept
+        {
+            const std::uint32_t sign = (static_cast<std::uint32_t>(value & 0x8000u)) << 16;
+            std::uint32_t exponent = (value >> 10) & 0x1Fu;
+            std::uint32_t mantissa = value & 0x3FFu;
+            std::uint32_t bits = 0;
+            if (exponent == 0)
+            {
+                if (mantissa == 0) bits = sign;
+                else
+                {
+                    int unbiased = -14;
+                    while ((mantissa & 0x400u) == 0)
+                    {
+                        mantissa <<= 1;
+                        --unbiased;
+                    }
+                    mantissa &= 0x3FFu;
+                    bits = sign | (static_cast<std::uint32_t>(unbiased + 127) << 23)
+                        | (mantissa << 13);
+                }
+            }
+            else if (exponent == 0x1Fu)
+                bits = sign | 0x7F800000u | (mantissa << 13);
+            else
+                bits = sign | ((exponent - 15u + 127u) << 23) | (mantissa << 13);
+            return std::bit_cast<float>(bits);
+        }
+    }
+
+    struct Float16 final
+    {
+        std::uint16_t bits = 0;
+        constexpr Float16() noexcept = default;
+        template<typename T> requires std::is_arithmetic_v<T>
+        constexpr Float16(T value) noexcept
+            : bits(tensor_dtype_detail::FloatToHalfBits(static_cast<float>(value))) {}
+        [[nodiscard]] constexpr operator float() const noexcept
+        {
+            return tensor_dtype_detail::HalfBitsToFloat(bits);
+        }
+        constexpr Float16& operator+=(Float16 rhs) noexcept { return *this = Float16(float(*this) + float(rhs)); }
+        constexpr Float16& operator-=(Float16 rhs) noexcept { return *this = Float16(float(*this) - float(rhs)); }
+        constexpr Float16& operator*=(Float16 rhs) noexcept { return *this = Float16(float(*this) * float(rhs)); }
+        constexpr Float16& operator/=(Float16 rhs) noexcept { return *this = Float16(float(*this) / float(rhs)); }
+        friend constexpr Float16 operator+(Float16 a, Float16 b) noexcept { return Float16(float(a) + float(b)); }
+        friend constexpr Float16 operator-(Float16 a, Float16 b) noexcept { return Float16(float(a) - float(b)); }
+        friend constexpr Float16 operator-(Float16 value) noexcept { return Float16(-float(value)); }
+        friend constexpr Float16 operator*(Float16 a, Float16 b) noexcept { return Float16(float(a) * float(b)); }
+        friend constexpr Float16 operator/(Float16 a, Float16 b) noexcept { return Float16(float(a) / float(b)); }
+        friend constexpr bool operator==(Float16, Float16) noexcept = default;
+        friend constexpr auto operator<=>(Float16 a, Float16 b) noexcept { return float(a) <=> float(b); }
+    };
+
+    struct BFloat16 final
+    {
+        std::uint16_t bits = 0;
+        constexpr BFloat16() noexcept = default;
+        template<typename T> requires std::is_arithmetic_v<T>
+        constexpr BFloat16(T value) noexcept
+        {
+            std::uint32_t raw = std::bit_cast<std::uint32_t>(static_cast<float>(value));
+            raw += 0x7FFFu + ((raw >> 16) & 1u);
+            bits = static_cast<std::uint16_t>(raw >> 16);
+        }
+        [[nodiscard]] constexpr operator float() const noexcept
+        {
+            return std::bit_cast<float>(static_cast<std::uint32_t>(bits) << 16);
+        }
+        constexpr BFloat16& operator+=(BFloat16 rhs) noexcept { return *this = BFloat16(float(*this) + float(rhs)); }
+        constexpr BFloat16& operator-=(BFloat16 rhs) noexcept { return *this = BFloat16(float(*this) - float(rhs)); }
+        constexpr BFloat16& operator*=(BFloat16 rhs) noexcept { return *this = BFloat16(float(*this) * float(rhs)); }
+        constexpr BFloat16& operator/=(BFloat16 rhs) noexcept { return *this = BFloat16(float(*this) / float(rhs)); }
+        friend constexpr BFloat16 operator+(BFloat16 a, BFloat16 b) noexcept { return BFloat16(float(a) + float(b)); }
+        friend constexpr BFloat16 operator-(BFloat16 a, BFloat16 b) noexcept { return BFloat16(float(a) - float(b)); }
+        friend constexpr BFloat16 operator-(BFloat16 value) noexcept { return BFloat16(-float(value)); }
+        friend constexpr BFloat16 operator*(BFloat16 a, BFloat16 b) noexcept { return BFloat16(float(a) * float(b)); }
+        friend constexpr BFloat16 operator/(BFloat16 a, BFloat16 b) noexcept { return BFloat16(float(a) / float(b)); }
+        friend constexpr bool operator==(BFloat16, BFloat16) noexcept = default;
+        friend constexpr auto operator<=>(BFloat16 a, BFloat16 b) noexcept { return float(a) <=> float(b); }
+    };
+
+    template<typename T>
+    concept TensorScalar = Arithmetic<T>
+        || std::same_as<T, Float16> || std::same_as<T, BFloat16>;
+
+    template<typename T>
+    concept TensorFloating = FloatingPoint<T>
+        || std::same_as<T, Float16> || std::same_as<T, BFloat16>;
+
     /// Describes the execution backend used by tensor kernels.
     ///
     /// Current implementation status:
@@ -47,7 +180,7 @@ export namespace kairo::foundation::math
     ///   passing the pointer to APIs that expect dense memory.
     /// - The scalar backend is intentionally simple and correct. Optimized
     ///   SIMD/thread/GPU kernels should be added behind these operations later.
-    template<Arithmetic T>
+    template<TensorScalar T>
     class Tensor final
     {
     public:
@@ -426,7 +559,7 @@ export namespace kairo::foundation::math
         /// Output: arithmetic mean of all logical elements.
         [[nodiscard]]
         T Mean() const noexcept
-            requires FloatingPoint<T>
+            requires TensorFloating<T>
         {
             return Empty() ? T(0) : Sum() / static_cast<T>(Size());
         }
@@ -534,7 +667,7 @@ export namespace kairo::foundation::math
 
     };
 
-    template<Arithmetic T, typename Fn>
+    template<TensorScalar T, typename Fn>
     [[nodiscard]]
     Tensor<T> ElementwiseBinary(const Tensor<T>& lhs, const Tensor<T>& rhs, Fn&& op)
     {
@@ -551,49 +684,49 @@ export namespace kairo::foundation::math
         return result;
     }
 
-    template<Arithmetic T>
+    template<TensorScalar T>
     [[nodiscard]]
     Tensor<T> operator+(const Tensor<T>& lhs, const Tensor<T>& rhs)
     {
         return ElementwiseBinary(lhs, rhs, [](T a, T b) { return a + b; });
     }
 
-    template<Arithmetic T>
+    template<TensorScalar T>
     [[nodiscard]]
     Tensor<T> operator-(const Tensor<T>& lhs, const Tensor<T>& rhs)
     {
         return ElementwiseBinary(lhs, rhs, [](T a, T b) { return a - b; });
     }
 
-    template<Arithmetic T>
+    template<TensorScalar T>
     [[nodiscard]]
     Tensor<T> operator*(const Tensor<T>& lhs, const Tensor<T>& rhs)
     {
         return ElementwiseBinary(lhs, rhs, [](T a, T b) { return a * b; });
     }
 
-    template<Arithmetic T>
+    template<TensorScalar T>
     [[nodiscard]]
     Tensor<T> operator/(const Tensor<T>& lhs, const Tensor<T>& rhs)
     {
         return ElementwiseBinary(lhs, rhs, [](T a, T b) { return a / b; });
     }
 
-    template<Arithmetic T>
+    template<TensorScalar T>
     [[nodiscard]]
     Tensor<T> operator*(const Tensor<T>& tensor, T scalar)
     {
         return tensor.Map([scalar](T value) { return value * scalar; });
     }
 
-    template<Arithmetic T>
+    template<TensorScalar T>
     [[nodiscard]]
     Tensor<T> operator*(T scalar, const Tensor<T>& tensor)
     {
         return tensor * scalar;
     }
 
-    template<Arithmetic T>
+    template<TensorScalar T>
     [[nodiscard]]
     Tensor<T> operator+(const Tensor<T>& tensor, T scalar)
     {
@@ -604,7 +737,7 @@ export namespace kairo::foundation::math
     /// Output: rank-2 tensor result[M, N].
     /// Task: provide the baseline GEMM kernel used by dense layers and
     /// attention blocks. The loop order is i-k-j for row-major locality.
-    template<Arithmetic T>
+    template<TensorScalar T>
     [[nodiscard]]
     Tensor<T> MatMul(const Tensor<T>& lhs, const Tensor<T>& rhs)
     {
@@ -617,28 +750,138 @@ export namespace kairo::foundation::math
         const std::size_t inner = lhs.Dim(1);
         const std::size_t cols = rhs.Dim(1);
 
+        using Accumulator = std::conditional_t<
+            std::same_as<T, Float16> || std::same_as<T, BFloat16>, float, T>;
         Tensor<T> result({ rows, cols }, T(0));
         for (std::size_t i = 0; i < rows; ++i)
         {
-            for (std::size_t k = 0; k < inner; ++k)
+            for (std::size_t j = 0; j < cols; ++j)
             {
-                const T factor = lhs(i, k);
-                if (factor == T(0))
-                {
-                    continue;
-                }
-                for (std::size_t j = 0; j < cols; ++j)
-                {
-                    result(i, j) += factor * rhs(k, j);
-                }
+                Accumulator sum = Accumulator(0);
+                for (std::size_t k = 0; k < inner; ++k)
+                    sum += static_cast<Accumulator>(lhs(i, k))
+                        * static_cast<Accumulator>(rhs(k, j));
+                result(i, j) = static_cast<T>(sum);
             }
         }
         return result;
     }
 
+    /// Input: tensors [...,M,K] and [...,K,N] with identical batch dimensions.
+    /// Output: tensor [...,M,N]. Low-precision inputs accumulate in Float32.
+    /// Failure: broadcasting batch dimensions is deliberately not implicit.
+    template<TensorScalar T>
+    [[nodiscard]]
+    Tensor<T> BatchedMatMul(const Tensor<T>& lhs, const Tensor<T>& rhs)
+    {
+        if (lhs.Rank() < 3 || rhs.Rank() != lhs.Rank()
+            || lhs.Dim(lhs.Rank() - 1) != rhs.Dim(rhs.Rank() - 2))
+            throw std::invalid_argument("BatchedMatMul expects [...,M,K] x [...,K,N].");
+        for (std::size_t axis = 0; axis + 2 < lhs.Rank(); ++axis)
+            if (lhs.Dim(axis) != rhs.Dim(axis))
+                throw std::invalid_argument("BatchedMatMul batch dimensions must match.");
+        const std::size_t rows = lhs.Dim(lhs.Rank() - 2);
+        const std::size_t inner = lhs.Dim(lhs.Rank() - 1);
+        const std::size_t columns = rhs.Dim(rhs.Rank() - 1);
+        const std::size_t batches = lhs.Size() / (rows * inner);
+        typename Tensor<T>::Shape shape = lhs.GetShape();
+        shape[shape.size() - 1] = columns;
+        Tensor<T> output(shape, T(0));
+        using Accumulator = std::conditional_t<
+            std::same_as<T, Float16> || std::same_as<T, BFloat16>, float, T>;
+        for (std::size_t batch = 0; batch < batches; ++batch)
+            for (std::size_t row = 0; row < rows; ++row)
+                for (std::size_t column = 0; column < columns; ++column)
+                {
+                    Accumulator sum = Accumulator(0);
+                    for (std::size_t k = 0; k < inner; ++k)
+                        sum += static_cast<Accumulator>(
+                            lhs[batch * rows * inner + row * inner + k])
+                            * static_cast<Accumulator>(
+                                rhs[batch * inner * columns + k * columns + column]);
+                    output[batch * rows * columns + row * columns + column] =
+                        static_cast<T>(sum);
+                }
+        return output;
+    }
+
+    /// Input: any TensorScalar source and destination type.
+    /// Output: owning contiguous tensor with value-wise checked C++ conversion.
+    template<TensorScalar To, TensorScalar From>
+    [[nodiscard]]
+    Tensor<To> TensorCast(const Tensor<From>& input)
+    {
+        Tensor<To> output(input.GetShape());
+        for (std::size_t index = 0; index < input.Size(); ++index)
+            output[index] = static_cast<To>(input[index]);
+        return output;
+    }
+
+    /// Input: floating tensor and epsilon; normalization is over the final axis.
+    /// Output: zero-mean, unit-variance groups in the same dtype. Statistics for
+    /// Float16 and BFloat16 are accumulated in Float32.
+    template<TensorFloating T>
+    [[nodiscard]]
+    Tensor<T> LayerNormLastDim(const Tensor<T>& input, float epsilon = 1e-5f)
+    {
+        if (input.Rank() == 0 || input.Dim(input.Rank() - 1) == 0 || !(epsilon > 0.0f))
+            throw std::invalid_argument("LayerNormLastDim requires a final axis and positive epsilon.");
+        const std::size_t width = input.Dim(input.Rank() - 1);
+        const std::size_t groups = input.Size() / width;
+        Tensor<T> output(input.GetShape());
+        for (std::size_t group = 0; group < groups; ++group)
+        {
+            float mean = 0.0f;
+            for (std::size_t column = 0; column < width; ++column)
+                mean += static_cast<float>(input[group * width + column]);
+            mean /= static_cast<float>(width);
+            float variance = 0.0f;
+            for (std::size_t column = 0; column < width; ++column)
+            {
+                const float centered =
+                    static_cast<float>(input[group * width + column]) - mean;
+                variance += centered * centered;
+            }
+            const float inverse = 1.0f
+                / std::sqrt(variance / static_cast<float>(width) + epsilon);
+            for (std::size_t column = 0; column < width; ++column)
+                output[group * width + column] = static_cast<T>(
+                    (static_cast<float>(input[group * width + column]) - mean) * inverse);
+        }
+        return output;
+    }
+
+    /// Input: floating tensor and epsilon; normalization is over the final axis.
+    /// Output: unit root-mean-square groups without mean subtraction.
+    template<TensorFloating T>
+    [[nodiscard]]
+    Tensor<T> RMSNormLastDim(const Tensor<T>& input, float epsilon = 1e-5f)
+    {
+        if (input.Rank() == 0 || input.Dim(input.Rank() - 1) == 0 || !(epsilon > 0.0f))
+            throw std::invalid_argument("RMSNormLastDim requires a final axis and positive epsilon.");
+        const std::size_t width = input.Dim(input.Rank() - 1);
+        const std::size_t groups = input.Size() / width;
+        Tensor<T> output(input.GetShape());
+        for (std::size_t group = 0; group < groups; ++group)
+        {
+            float squares = 0.0f;
+            for (std::size_t column = 0; column < width; ++column)
+            {
+                const float value = static_cast<float>(input[group * width + column]);
+                squares += value * value;
+            }
+            const float inverse = 1.0f
+                / std::sqrt(squares / static_cast<float>(width) + epsilon);
+            for (std::size_t column = 0; column < width; ++column)
+                output[group * width + column] =
+                    static_cast<T>(static_cast<float>(input[group * width + column]) * inverse);
+        }
+        return output;
+    }
+
     /// Input: tensor.
     /// Output: same-shaped tensor with max(x, 0).
-    template<FloatingPoint T>
+    template<TensorFloating T>
     [[nodiscard]]
     Tensor<T> ReLU(const Tensor<T>& input)
     {
@@ -647,7 +890,7 @@ export namespace kairo::foundation::math
 
     /// Input: tensor.
     /// Output: same-shaped tensor with logistic activation.
-    template<FloatingPoint T>
+    template<TensorFloating T>
     [[nodiscard]]
     Tensor<T> Sigmoid(const Tensor<T>& input)
     {
@@ -656,7 +899,7 @@ export namespace kairo::foundation::math
 
     /// Input: tensor.
     /// Output: same-shaped tensor with tanh activation.
-    template<FloatingPoint T>
+    template<TensorFloating T>
     [[nodiscard]]
     Tensor<T> Tanh(const Tensor<T>& input)
     {
@@ -666,7 +909,7 @@ export namespace kairo::foundation::math
     /// Input: tensor with class logits in the final dimension.
     /// Output: probabilities normalized along the final dimension.
     /// Task: support classification heads and attention score normalization.
-    template<FloatingPoint T>
+    template<TensorFloating T>
     [[nodiscard]]
     Tensor<T> SoftmaxLastDim(const Tensor<T>& logits)
     {
@@ -713,7 +956,7 @@ export namespace kairo::foundation::math
 
     /// Input: one-hot labels and predicted probabilities with the same shape.
     /// Output: mean cross-entropy loss.
-    template<FloatingPoint T>
+    template<TensorFloating T>
     [[nodiscard]]
     T CrossEntropyMean(const Tensor<T>& labels, const Tensor<T>& probabilities, T epsilon = T(1e-7))
     {
@@ -748,7 +991,7 @@ export namespace kairo::foundation::math
 
     /// Input: predictions and labels with the same shape.
     /// Output: mean squared error.
-    template<FloatingPoint T>
+    template<TensorFloating T>
     [[nodiscard]]
     T MeanSquaredError(const Tensor<T>& predictions, const Tensor<T>& labels)
     {
@@ -768,7 +1011,7 @@ export namespace kairo::foundation::math
 
     /// Input: class labels and class count.
     /// Output: rank-2 one-hot tensor [labels.size(), classCount].
-    template<FloatingPoint T>
+    template<TensorFloating T>
     [[nodiscard]]
     Tensor<T> OneHot(std::span<const std::size_t> labels, std::size_t classCount)
     {
@@ -786,7 +1029,7 @@ export namespace kairo::foundation::math
     /// Input: tensor values and absolute clip bound.
     /// Output: values clipped in place to [-clipValue, +clipValue].
     /// Task: support gradient clipping for stable training.
-    template<FloatingPoint T>
+    template<TensorFloating T>
     void ClipInPlace(Tensor<T>& tensor, T clipValue)
     {
         const T bound = std::abs(clipValue);
@@ -800,7 +1043,7 @@ export namespace kairo::foundation::math
     /// Output: parameter tensor updated by SGD.
     /// Task: provide the smallest optimizer primitive; momentum/Adam build on
     /// this same tensor mutation pattern.
-    template<FloatingPoint T>
+    template<TensorFloating T>
     void SGDUpdate(Tensor<T>& parameters, const Tensor<T>& gradients, T learningRate)
     {
         if (parameters.GetShape() != gradients.GetShape())
@@ -852,7 +1095,7 @@ export namespace kairo::foundation::math
     /// filters [outputChannels,kernelHeight,kernelWidth,inputChannels].
     /// Output: valid-convolution NHWC activations. This is the CPU reference
     /// kernel; scheduler/SIMD/GPU backends must preserve these conventions.
-    template<FloatingPoint T>
+    template<TensorFloating T>
     [[nodiscard]]
     Tensor<T> Conv2DValidNHWC(const Tensor<T>& input, const Tensor<T>& filters,
         std::size_t strideHeight = 1, std::size_t strideWidth = 1)
@@ -888,7 +1131,7 @@ export namespace kairo::foundation::math
 
     /// Input: NHWC activation and pooling window/stride dimensions.
     /// Output: valid max-pooled NHWC activation tensor.
-    template<FloatingPoint T>
+    template<TensorFloating T>
     [[nodiscard]]
     Tensor<T> MaxPool2DValidNHWC(const Tensor<T>& input,
         std::size_t windowHeight, std::size_t windowWidth,
@@ -919,5 +1162,9 @@ export namespace kairo::foundation::math
     using Tensorf = Tensor<float>;
     using Tensord = Tensor<double>;
     using Tensori = Tensor<int>;
+    using TensorFloat16 = Tensor<Float16>;
+    using TensorBFloat16 = Tensor<BFloat16>;
+    using TensorInt8 = Tensor<std::int8_t>;
+    using TensorIndex = Tensor<std::int64_t>;
 
 } // namespace kairo::foundation::math
