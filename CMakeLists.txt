@@ -37,6 +37,7 @@ target_sources(KairoMath
             DynamicMatrix.cppm
             Tensor.cppm
             TensorAutograd.cppm
+            TensorTraining.cppm
             LinearSolve.cppm
             Decomposition.cppm
             Eigen.cppm
@@ -52,6 +53,9 @@ if(KAIRO_MATH_BUILD_TESTS)
     add_executable(TensorAutogradSmoke tests/TensorAutogradSmoke.cpp)
     target_link_libraries(TensorAutogradSmoke PRIVATE KairoMath)
     add_test(NAME KairoMath.TensorAutogradSmoke COMMAND TensorAutogradSmoke)
+    add_executable(TensorTrainingSmoke tests/TensorTrainingSmoke.cpp)
+    target_link_libraries(TensorTrainingSmoke PRIVATE KairoMath)
+    add_test(NAME KairoMath.TensorTrainingSmoke COMMAND TensorTrainingSmoke)
 endif()
 
 if(KAIRO_MATH_USE_SCHEDULER)

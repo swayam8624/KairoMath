@@ -84,6 +84,7 @@ kernel dispatch.
     ```cpp
     import Kairo.Foundation.Math.Tensor;
     import Kairo.Foundation.Math.TensorAutograd;
+    import Kairo.Foundation.Math.TensorTraining;
     ```
 
 `Kairo.Foundation.Math.TensorAutograd` provides dynamic reverse-mode graphs over
@@ -98,6 +99,16 @@ The validation suite compares dense and convolution gradients with central
 finite differences, verifies max-pool routing, trains a two-layer nonlinear XOR
 classifier, and trains a small convolutional image classifier to full accuracy
 using Tensor-owned parameters and SGD.
+
+`Kairo.Foundation.Math.TensorTraining` adds reusable stateful SGD, Momentum,
+Nesterov, RMSProp, Adam, and AdamW optimizers. It supports global gradient-norm
+clipping, coupled or decoupled weight decay, warmup, constant, step-decay, and
+cosine learning-rate schedules. `TensorTrainingCheckpoint` atomically persists
+parameter values, complete optimizer moments and configuration, completed-step
+state, and the reproducible `TrainingRandom` state. Loading validates the full
+payload and every shape before mutating live training state. The training smoke
+test proves that interrupted AdamW training resumes bit-for-bit identically to
+an uninterrupted run.
 
 All types, constants, and math functions live inside the C++ namespace:
 ```cpp

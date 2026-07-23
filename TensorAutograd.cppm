@@ -5,6 +5,7 @@ module;
 #include <functional>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -121,7 +122,40 @@ export namespace kairo::foundation::math
                 state_->value[index] -= learningRate * state_->gradient[index];
         }
 
+        /// Input: a Tensor with the same shape as this trainable variable.
+        /// Output: the update is subtracted in place from the parameter value.
+        /// Task: provide optimizers a checked mutation boundary without exposing
+        /// the autograd node or its storage ownership.
+        void ApplyUpdate(const Tensor<float>& update)
+        {
+            ValidateShape(update, "ApplyUpdate");
+            if (!state_->requiresGradient)
+                throw std::logic_error("ApplyUpdate requires a trainable variable.");
+            for (std::size_t index = 0; index < state_->value.Size(); ++index)
+                state_->value[index] -= update[index];
+        }
+
+        /// Input: a fully materialized Tensor with the same shape.
+        /// Output: parameter storage is replaced and any stale gradient cleared.
+        /// Task: restore validated checkpoint values atomically at the variable
+        /// boundary.
+        void LoadValue(Tensor<float> value)
+        {
+            ValidateShape(value, "LoadValue");
+            state_->value = std::move(value);
+            ZeroGradient();
+        }
+
     private:
+        void ValidateShape(const Tensor<float>& tensor, const char* operation) const
+        {
+            if (state_->value.Rank() != tensor.Rank())
+                throw std::invalid_argument(std::string(operation) + " rank mismatch.");
+            for (std::size_t axis = 0; axis < state_->value.Rank(); ++axis)
+                if (state_->value.Dim(axis) != tensor.Dim(axis))
+                    throw std::invalid_argument(std::string(operation) + " shape mismatch.");
+        }
+
         explicit Variable(std::shared_ptr<autograd_detail::Node> state) : state_(std::move(state)) {}
         std::shared_ptr<autograd_detail::Node> state_;
 
