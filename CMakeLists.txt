@@ -36,6 +36,7 @@ target_sources(KairoMath
             Transform.cppm
             DynamicMatrix.cppm
             Tensor.cppm
+            TensorAutograd.cppm
             LinearSolve.cppm
             Decomposition.cppm
             Eigen.cppm
@@ -46,6 +47,12 @@ target_sources(KairoMath
             Probability.cppm
             KairoMath.cppm
 )
+
+if(KAIRO_MATH_BUILD_TESTS)
+    add_executable(TensorAutogradSmoke tests/TensorAutogradSmoke.cpp)
+    target_link_libraries(TensorAutogradSmoke PRIVATE KairoMath)
+    add_test(NAME KairoMath.TensorAutogradSmoke COMMAND TensorAutogradSmoke)
+endif()
 
 if(KAIRO_MATH_USE_SCHEDULER)
     if(NOT EXISTS "${KAIRO_SCHEDULER_DIR}/CMakeLists.txt")

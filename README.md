@@ -82,9 +82,18 @@ conventions are the correctness contract for later scheduler, SIMD, and GPU
 kernel dispatch.
 *   **Import Interfaces**:
     ```cpp
-    import Kairo.Foundation.Math.Optimization;
-    import Kairo.Foundation.Math.Probability;
+    import Kairo.Foundation.Math.Tensor;
+    import Kairo.Foundation.Math.TensorAutograd;
     ```
+
+`Kairo.Foundation.Math.TensorAutograd` provides dynamic reverse-mode graphs over
+Float32 Tensor values. The implemented differentiable surface includes
+elementwise add/multiply, row-bias broadcasting, matrix multiplication, ReLU,
+mean-squared loss, and stable softmax cross-entropy. Gradients accumulate
+additively into trainable leaves until `ZeroGradient()` is called; `Backward()`
+requires a one-element scalar loss. The validation suite compares matmul/MSE
+gradients with central finite differences and trains a two-layer nonlinear XOR
+classifier to full accuracy using Tensor-owned parameters and SGD.
 
 All types, constants, and math functions live inside the C++ namespace:
 ```cpp
@@ -108,6 +117,7 @@ import Kairo.Foundation.Math.Quaternion;
 import Kairo.Foundation.Math.Transform;
 import Kairo.Foundation.Math.DynamicMatrix;
 import Kairo.Foundation.Math.Tensor;
+import Kairo.Foundation.Math.TensorAutograd;
 import Kairo.Foundation.Math.LinearAlgebra.LinearSolve;
 import Kairo.Foundation.Math.LinearAlgebra.Decomposition;
 import Kairo.Foundation.Math.LinearAlgebra.Eigen;
