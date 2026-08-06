@@ -1,0 +1,46 @@
+name: Apply Phase 0 Vector Equality Portability Patch
+
+on:
+  push:
+    branches:
+      - agent/phase0-portable-checkpoints
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/phase0-portable-checkpoints
+          fetch-depth: 0
+      - name: Replace defaulted vector equality
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('Vector.cppm')
+          source = path.read_text()
+          replacements = {
+              'constexpr bool operator==(const Vector2&) const noexcept = default;':
+                  'constexpr bool operator==(const Vector2& rhs) const noexcept\n        {\n            return x == rhs.x && y == rhs.y;\n        }',
+              'constexpr bool operator==(const Vector3&) const noexcept = default;':
+                  'constexpr bool operator==(const Vector3& rhs) const noexcept\n        {\n            return x == rhs.x && y == rhs.y && z == rhs.z;\n        }',
+              'constexpr bool operator==(const Vector4&) const noexcept = default;':
+                  'constexpr bool operator==(const Vector4& rhs) const noexcept\n        {\n            return x == rhs.x && y == rhs.y && z == rhs.z && w == rhs.w;\n        }',
+          }
+          for old, new in replacements.items():
+              if old not in source:
+                  raise SystemExit(f'missing expected expression: {old}')
+              source = source.replace(old, new)
+          path.write_text(source)
+          Path('.github/workflows/phase0-vector-equality-portability.yml').unlink()
+      - name: Commit portable vector equality
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Vector.cppm .github/workflows/phase0-vector-equality-portability.yml
+          git commit -m "Fix portable vector equality across modules"
+          git push origin HEAD:agent/phase0-portable-checkpoints
