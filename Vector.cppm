@@ -286,7 +286,10 @@ export namespace kairo::foundation::math
         /// Task: exact comparison for integers and deterministic values. Use
         /// NearlyEqual() for floating-point tolerance comparisons.
         [[nodiscard]]
-        constexpr bool operator==(const Vector2&) const noexcept = default;
+        constexpr bool operator==(const Vector2& rhs) const noexcept
+        {
+            return x == rhs.x && y == rhs.y;
+        }
 
         //-----------------------------------------------------
         // Math
@@ -638,7 +641,10 @@ export namespace kairo::foundation::math
         /// Input: another vector. Output: exact component equality.
         /// Task: deterministic exact comparison; use NearlyEqual() for floats.
         [[nodiscard]]
-        constexpr bool operator==(const Vector3&) const noexcept = default;
+        constexpr bool operator==(const Vector3& rhs) const noexcept
+        {
+            return x == rhs.x && y == rhs.y && z == rhs.z;
+        }
 
         /// Input: this vector. Output: squared Euclidean length.
         /// Task: magnitude comparison without sqrt.
@@ -953,7 +959,10 @@ export namespace kairo::foundation::math
         /// Input: another vector. Output: exact component equality.
         /// Task: deterministic exact comparison.
         [[nodiscard]]
-        constexpr bool operator==(const Vector4&) const noexcept = default;
+        constexpr bool operator==(const Vector4& rhs) const noexcept
+        {
+            return x == rhs.x && y == rhs.y && z == rhs.z && w == rhs.w;
+        }
 
         /// Input: this vector. Output: squared Euclidean length.
         /// Task: magnitude comparison without sqrt.

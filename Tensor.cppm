@@ -351,7 +351,7 @@ export namespace kairo::foundation::math
         [[nodiscard]]
         bool IsContiguous() const noexcept
         {
-            return m_offset == 0 && m_strides == MakeContiguousStrides(m_shape);
+            return m_offset == 0 && std::ranges::equal(m_strides, MakeContiguousStrides(m_shape));
         }
 
         /// Input: none.
@@ -671,7 +671,7 @@ export namespace kairo::foundation::math
     [[nodiscard]]
     Tensor<T> ElementwiseBinary(const Tensor<T>& lhs, const Tensor<T>& rhs, Fn&& op)
     {
-        if (lhs.GetShape() != rhs.GetShape())
+        if (!std::ranges::equal(lhs.GetShape(), rhs.GetShape()))
         {
             throw std::invalid_argument("Tensor elementwise operation shape mismatch.");
         }
@@ -960,7 +960,7 @@ export namespace kairo::foundation::math
     [[nodiscard]]
     T CrossEntropyMean(const Tensor<T>& labels, const Tensor<T>& probabilities, T epsilon = T(1e-7))
     {
-        if (labels.GetShape() != probabilities.GetShape())
+        if (!std::ranges::equal(labels.GetShape(), probabilities.GetShape()))
         {
             throw std::invalid_argument("CrossEntropyMean shape mismatch.");
         }
@@ -995,7 +995,7 @@ export namespace kairo::foundation::math
     [[nodiscard]]
     T MeanSquaredError(const Tensor<T>& predictions, const Tensor<T>& labels)
     {
-        if (predictions.GetShape() != labels.GetShape())
+        if (!std::ranges::equal(predictions.GetShape(), labels.GetShape()))
         {
             throw std::invalid_argument("MeanSquaredError shape mismatch.");
         }
@@ -1046,7 +1046,7 @@ export namespace kairo::foundation::math
     template<TensorFloating T>
     void SGDUpdate(Tensor<T>& parameters, const Tensor<T>& gradients, T learningRate)
     {
-        if (parameters.GetShape() != gradients.GetShape())
+        if (!std::ranges::equal(parameters.GetShape(), gradients.GetShape()))
         {
             throw std::invalid_argument("SGDUpdate shape mismatch.");
         }
