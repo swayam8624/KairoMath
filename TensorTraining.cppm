@@ -417,6 +417,16 @@ namespace kairo::foundation::math::training_checkpoint_detail
     constexpr char Magic[8] = { 'K', 'A', 'I', 'R', 'O', 'T', 'R', 'N' };
     constexpr std::uint32_t Version = 2;
 
+    [[nodiscard]] std::FILE* OpenBinaryFile(
+        const std::filesystem::path& path, bool write) noexcept
+    {
+#ifdef _WIN32
+        return ::_wfopen(path.c_str(), write ? L"wb" : L"rb");
+#else
+        return std::fopen(path.c_str(), write ? "wb" : "rb");
+#endif
+    }
+
     template<class T>
     bool Write(std::FILE* file, const T& value)
     {
@@ -482,7 +492,7 @@ namespace kairo::foundation::math
         if (path.empty() || parameters.empty())
             throw std::invalid_argument("Checkpoint Save requires a path and parameters.");
         const std::filesystem::path temporary = path.string() + ".tmp";
-        std::FILE* file = std::fopen(temporary.c_str(), "wb");
+        std::FILE* file = detail::OpenBinaryFile(temporary, true);
         if (!file) throw std::runtime_error("Cannot open checkpoint temporary file.");
         const TensorOptimizerState state = optimizer.State();
         const std::uint64_t parameterCount = parameters.size();
@@ -534,7 +544,7 @@ namespace kairo::foundation::math
         namespace detail = training_checkpoint_detail;
         if (path.empty() || parameters.empty())
             throw std::invalid_argument("Checkpoint Load requires a path and parameters.");
-        std::FILE* file = std::fopen(path.c_str(), "rb");
+        std::FILE* file = detail::OpenBinaryFile(path, false);
         if (!file) throw std::runtime_error("Cannot open training checkpoint.");
         char magic[sizeof(detail::Magic)]{};
         std::uint32_t version = 0;
