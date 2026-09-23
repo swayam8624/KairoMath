@@ -2,10 +2,7 @@
 
 #include <cmath>
 
-import Kairo.Foundation.Math.Vector;
-import Kairo.Foundation.Math.Matrix;
-import Kairo.Foundation.Math.Transform;
-import Kairo.Foundation.Math.DynamicMatrix;
+import Kairo.Foundation.Math;
 
 using namespace kairo::foundation::math;
 
