@@ -115,6 +115,10 @@ if(KAIRO_MATH_BUILD_TESTS)
     target_link_libraries(MathTests PRIVATE KairoMath Catch2::Catch2WithMain)
     add_test(NAME KairoMath.MathTests COMMAND MathTests)
 
+    add_executable(KairoMathCertification tests/FoundationCertification.cpp)
+    target_link_libraries(KairoMathCertification PRIVATE KairoMath Catch2::Catch2WithMain)
+    add_test(NAME KairoMath.Certification COMMAND KairoMathCertification)
+
 endif()
 
 # The visual laboratory is a developer-facing executable, not a library test.
