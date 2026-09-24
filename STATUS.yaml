@@ -2,10 +2,11 @@ schema: kairo.repo-status.v1
 repository: KairoMath
 wave: A
 scope: foundation-v1
-completion_score: 95
+completion_score: unverified
 target_score: 95
+claim_state: retracted_until_acceptance
 score_policy: frozen_scope_source_completeness
-source_gate: complete
+source_gate: pending_exact_head_acceptance
 exact_head_execution: pending_external_runner
 verification_gate: cmake-build-and-ctest
 research_track: none
