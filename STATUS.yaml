@@ -5,12 +5,12 @@ scope: foundation-v1
 completion_score: unverified
 target_score: 95
 claim_state: retracted_until_acceptance
-score_policy: frozen_scope_source_completeness
+score_policy: exact_head_evidence_required
 source_gate: pending_exact_head_acceptance
 exact_head_execution: pending_external_runner
 verification_gate: cmake-build-and-ctest
 research_track: none
 score_meaning:
-  implementation_and_contract: complete_for_wave
+  implementation_and_contract: pending_exact_head_acceptance
   verification: tracked_separately_from_completion_score
-  future_out_of_scope_features: do_not_reduce_frozen_score
+  future_out_of_scope_features: excluded_only_after_v1_acceptance
