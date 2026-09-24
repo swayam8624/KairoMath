@@ -421,7 +421,9 @@ namespace kairo::foundation::math::training_checkpoint_detail
         const std::filesystem::path& path, bool write) noexcept
     {
 #ifdef _WIN32
-        return ::_wfopen(path.c_str(), write ? L"wb" : L"rb");
+        std::FILE* file = nullptr;
+        return ::_wfopen_s(&file, path.c_str(), write ? L"wb" : L"rb") == 0
+            ? file : nullptr;
 #else
         return std::fopen(path.c_str(), write ? "wb" : "rb");
 #endif
