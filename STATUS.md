@@ -1,22 +1,19 @@
-# KairoMath Status
+# KairoMath v1 Status
 
-Wave: A — foundation certification  
-Frozen v1 target: 95/100  
-Source gate: complete  
-Execution gate: `cmake --build <build> && ctest --test-dir <build> --output-on-failure`
+**Target: 95%. Current completion claim: UNVERIFIED.**
 
-## Frozen v1 scope
+The earlier percentage claim has been retracted. A frozen scope or a populated
+`STATUS.yaml` is not evidence that this repository builds, runs, or satisfies
+its integration contract.
 
-KairoMath v1 owns allocation-free engine vectors/matrices/quaternions/transforms, dynamic linear algebra, decomposition/eigen/SVD/statistics/matrix functions, numerical optimization/probability, Tensor storage, autograd, training/checkpointing, mixed precision, and dataset primitives. New unrelated mathematics is not required for the 95 target.
+Current rules:
 
-## 95 exit evidence
+- `target_score: 95` is a target only.
+- `completion_score: unverified` remains until exact-head acceptance executes.
+- source/test failures block completion regardless of documentation state.
+- platform-gated behavior is not inferred from another host.
+- post-v1 exclusions may bound scope, but they cannot hide missing v1 behavior.
 
-- Public module surface is complete for the frozen scope.
-- Existing correctness suite covers algebra, decomposition, optimization, tensors, autograd, training, dtypes, persistence, and invalid inputs.
-- `KairoMath.Certification` adds deterministic conditioned-matrix inversion checks and non-uniform TRS world/local round-trip stress.
-- Downstream Geometry, PhysicsMath, Spatial, Renderer, RayTracer, and ML packages consume this contract.
-- Future work after certification is performance/backend specialization or bug repair, not feature-count expansion.
-
-## Verification policy
-
-The 95 score is a scope/completeness score. A release is called *verified at a SHA* only after its tests run on that exact SHA. Certification tests are deterministic and contain no network or device dependency.
+Use the repository's real build/test gate and the KairoGameEngine portfolio
+acceptance runner. Do not cite this repository as 95% complete until the
+accepted exact-head evidence matches the current revision.
