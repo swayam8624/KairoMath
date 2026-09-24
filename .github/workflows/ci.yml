@@ -1,0 +1,68 @@
+name: KairoMath CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Ubuntu Clang, os: ubuntu-latest, platform: linux }
+          - { name: macOS LLVM, os: macos-latest, platform: macos }
+          - { name: Windows MSVC, os: windows-2022, platform: windows }
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Activate MSVC
+        if: matrix.platform == 'windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Ubuntu toolchain
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang ninja-build cmake
+          echo "KAIRO_CXX=$(command -v clang++)" >> "$GITHUB_ENV"
+
+      - name: Install macOS toolchain
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          brew update
+          brew install cmake ninja llvm
+          echo "KAIRO_CXX=$(brew --prefix llvm)/bin/clang++" >> "$GITHUB_ENV"
+
+      - name: Configure Unix
+        if: matrix.platform != 'windows'
+        shell: bash
+        run: cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="$KAIRO_CXX" -DKAIRO_MATH_BUILD_VISUALIZER=OFF
+
+      - name: Configure Windows
+        if: matrix.platform == 'windows'
+        shell: bash
+        run: cmake -S . -B build/ci -G Ninja -DCMAKE_BUILD_TYPE=Release -DKAIRO_MATH_BUILD_VISUALIZER=OFF
+
+      - name: Build
+        shell: bash
+        run: cmake --build build/ci --parallel 2
+
+      - name: Test
+        shell: bash
+        run: ctest --test-dir build/ci --output-on-failure
