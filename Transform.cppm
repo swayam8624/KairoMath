@@ -286,6 +286,7 @@ export namespace kairo::foundation::math
     /// Task: convert TRS into the matrix form used by renderers and shaders.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: ToMatrix4 — Build homogeneous TRS with matrix layout/convention used by Renderer; scale then rotate then translate for a column vector.
     Matrix4<T> ToMatrix4(const Transform<T>& transform) noexcept
     {
         const Matrix4<T> translation = MakeTranslation(transform.Translation);
@@ -304,6 +305,7 @@ export namespace kairo::foundation::math
     /// Task: apply scale, then rotation, then translation.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: TransformPoint — Apply scale, quaternion rotation and translation; this transforms a location, unlike a direction.
     Vector3<T> TransformPoint(const Transform<T>& transform, const Vector3<T>& point) noexcept
     {
         Vector3<T> result = point;
@@ -318,6 +320,7 @@ export namespace kairo::foundation::math
     /// Task: apply rotation only; translation and scale are intentionally ignored.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: TransformDirection — Apply rotation only; use TransformVector if scale must affect vector length.
     Vector3<T> TransformDirection(const Transform<T>& transform, const Vector3<T>& direction) noexcept
     {
         return Rotate(transform.Rotation, direction);
@@ -328,6 +331,7 @@ export namespace kairo::foundation::math
     /// Task: apply scale and rotation but ignore translation.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: TransformVector — Apply scale and rotation but ignore translation, e.g. velocity or displacement vectors.
     Vector3<T> TransformVector(const Transform<T>& transform, const Vector3<T>& vector) noexcept
     {
         Vector3<T> result = vector;
@@ -438,6 +442,7 @@ export namespace kairo::foundation::math
     /// an exact non-uniform-scale inverse matrix is required.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Inverse — Requires nonzero UNIFORM scale: nonuniform scale plus rotation generally cannot be represented by an exact inverse TRS.
     Transform<T> Inverse(const Transform<T>& transform)
     {
         const T eps = std::numeric_limits<T>::epsilon() * T(10);
@@ -467,6 +472,7 @@ export namespace kairo::foundation::math
     /// immediately for animation, cameras, and editor gizmos.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Interpolate — Interpolate translation/scale linearly and rotation spherically; do not interpolate raw quaternion components without renormalizing.
     Transform<T> Interpolate(const Transform<T>& a, const Transform<T>& b, T alpha) noexcept
     {
         Transform<T> result;
