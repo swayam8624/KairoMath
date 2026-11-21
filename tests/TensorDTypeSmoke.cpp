@@ -1,3 +1,8 @@
+// TEACHING MAP — tests/TensorDTypeSmoke.cpp
+// Checks supported tensor scalar formats and conversion/storage rules; KairoONNX and GPU
+// backends must fail explicitly on unsupported dtypes.
+// Read READING_ORDER.md for related modules and verification expectations.
+
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
