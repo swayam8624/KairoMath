@@ -1,3 +1,7 @@
+// TEACHING MODULE: Fixed-size 2x2/3x3/4x4 algebra with ROW-MAJOR element storage but
+// COLUMN-VECTOR multiplication. Therefore A*B*v applies B first; translation
+// lives in the last matrix column. Vulkan/Metal style projection uses depth
+// [0,1]. Native GPU APIs may require packing/transposition or layout checks.
 module;
 
 #include <array>
