@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Optimization routines use underlying linear algebra and numerical objective operations; compare
+// convergence and tolerance behavior to ML TensorTraining.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <algorithm>
