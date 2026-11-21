@@ -27,6 +27,7 @@ export namespace kairo::foundation::math
     template<typename T>
         requires std::floating_point<T>
     [[nodiscard]]
+    /// TEACHING API: Tensor<T> ParallelAdd( — Partition output into nonoverlapping scheduler ranges; use SIMD fast path only for supported contiguous Float32 inputs.
     Tensor<T> ParallelAdd(
         kairo::scheduler::Scheduler& scheduler,
         const Tensor<T>& lhs,
@@ -135,6 +136,7 @@ export namespace kairo::foundation::math
     template<typename T>
         requires std::floating_point<T>
     [[nodiscard]]
+    /// TEACHING API: Tensor<T> ParallelMatMul( — Split output by independent rows; pack right-hand operand for cache-friendly inner products.
     Tensor<T> ParallelMatMul(
         kairo::scheduler::Scheduler& scheduler,
         const Tensor<T>& lhs,
@@ -172,6 +174,7 @@ export namespace kairo::foundation::math
     template<typename T>
         requires std::floating_point<T>
     [[nodiscard]]
+    /// TEACHING API: Tensor<T> ParallelBatchedMatMul( — Process independent batch matrix products via scheduler jobs and shape-checked packed operands.
     Tensor<T> ParallelBatchedMatMul(
         kairo::scheduler::Scheduler& scheduler,
         const Tensor<T>& lhs,
@@ -227,6 +230,7 @@ export namespace kairo::foundation::math
     template<typename T>
         requires std::floating_point<T>
     [[nodiscard]]
+    /// TEACHING API: Tensor<T> ParallelConv2DValidNHWC( — Compute valid-stride NHWC convolution over disjoint outputs; it is a selected kernel, not a universal convolution backend.
     Tensor<T> ParallelConv2DValidNHWC(
         kairo::scheduler::Scheduler& scheduler,
         const Tensor<T>& input,
