@@ -24,6 +24,7 @@ export namespace kairo::foundation::math
     /// Forward substitution to solve L * x = b where L is lower triangular.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: ForwardSubstitution — Solve Lx=b row by row; small diagonal entries make the triangular system singular/ill-conditioned.
     std::vector<T> ForwardSubstitution(const DynamicMatrix<T>& L, const std::vector<T>& b)
     {
         if (L.Rows() != L.Columns())
@@ -69,6 +70,7 @@ export namespace kairo::foundation::math
     /// Backward substitution to solve U * x = b where U is upper triangular.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: BackwardSubstitution — Solve Ux=b from final row upward, respecting matrix size and near-zero pivot checks.
     std::vector<T> BackwardSubstitution(const DynamicMatrix<T>& U, const std::vector<T>& b)
     {
         if (U.Rows() != U.Columns())
@@ -114,6 +116,7 @@ export namespace kairo::foundation::math
     /// Convert a matrix to Row Echelon Form (REF) using Gaussian elimination.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: RowEchelonForm — Gaussian elimination identifies pivot structure but is not an orthogonal decomposition.
     DynamicMatrix<T> RowEchelonForm(const DynamicMatrix<T>& A)
     {
         DynamicMatrix<T> M = A;
@@ -172,6 +175,7 @@ export namespace kairo::foundation::math
     /// Convert a matrix to Reduced Row Echelon Form (RREF) using Gauss-Jordan elimination.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: ReducedRowEchelonForm — Normalize pivots and eliminate above/below to reveal rank/linear constraints.
     DynamicMatrix<T> ReducedRowEchelonForm(const DynamicMatrix<T>& A)
     {
         DynamicMatrix<T> M = A;
@@ -239,6 +243,7 @@ export namespace kairo::foundation::math
     /// Solve A * x = b using Gaussian elimination with partial pivoting.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: GaussianElimination — Solve Ax=b via pivoted elimination and back-substitution; use residual norms to judge accuracy.
     std::vector<T> GaussianElimination(const DynamicMatrix<T>& A, const std::vector<T>& b)
     {
         if (A.Rows() != A.Columns())
@@ -328,6 +333,7 @@ export namespace kairo::foundation::math
     /// Solve A * x = b using Gauss-Jordan elimination.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: GaussJordanElimination — Eliminate both above and below pivot to solve directly, at additional arithmetic cost.
     std::vector<T> GaussJordanElimination(const DynamicMatrix<T>& A, const std::vector<T>& b)
     {
         if (A.Rows() != A.Columns())
@@ -377,6 +383,7 @@ export namespace kairo::foundation::math
     /// Generic linear solver: solves A * x = b using Gaussian elimination.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: LinearSolve — Preferred high-level solve API for A*x=b; avoid explicitly forming inverse for routine systems.
     std::vector<T> LinearSolve(const DynamicMatrix<T>& A, const std::vector<T>& b)
     {
         return GaussianElimination(A, b);
@@ -425,6 +432,7 @@ export namespace kairo::foundation::math
     /// Compute matrix inverse using LUP decomposition.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Inverse — Compute dynamic matrix inverse through linear solves; numerical stability depends on conditioning.
     DynamicMatrix<T> Inverse(const DynamicMatrix<T>& A)
     {
         if (A.Rows() != A.Columns())
