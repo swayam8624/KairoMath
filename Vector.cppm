@@ -1,3 +1,8 @@
+// TEACHING MODULE: Defines numeric vector value types, arithmetic/floating-point concepts,
+// dot/cross products, norms and interpolation. Geometry, Spatial, PhysicsMath,
+// Renderer and scientific tensor systems depend on its coordinate conventions.
+// Beware that squared length avoids sqrt but normalization divides by magnitude;
+// nearly-zero input must use guarded routines.
 // TEACHING MAP: C++23 vector primitives and low-level numeric conventions. Matrix, Quaternion, Transform, Geometry, Spatial and PhysicsMath depend on these components; verify normalization, precision and API storage assumptions through tests.
 module;
 
