@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Tensor dataset iteration/loading layer depends on Tensor shapes and dtype and supplies minibatches to
+// TensorTraining.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <algorithm>
