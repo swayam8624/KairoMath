@@ -1,3 +1,8 @@
+// TEACHING TEST FILE: Primary Catch2 mathematical contract suite. Each TEST_CASE verifies a
+// specific numerical invariant, shape condition or edge case through REQUIRE.
+// This is source-backed specification, not an executed result in this teaching
+// pass. Import narrower C++23 modules to identify actual dependencies.
+
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <algorithm>
