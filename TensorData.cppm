@@ -1,3 +1,8 @@
+// TEACHING MAP — TensorData.cppm
+// Tensor data ownership, shape/strides and typed storage. Tensor/TensorExecution build on
+// this; contiguous versus view-like memory and reference lifetimes matter for GPU copies.
+// See READING_ORDER.md for downstream APIs, numerical assumptions and tests.
+
 module;
 
 #include <algorithm>
