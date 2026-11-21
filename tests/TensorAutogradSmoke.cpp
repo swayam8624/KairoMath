@@ -1,3 +1,8 @@
+// TEACHING MAP — tests/TensorAutogradSmoke.cpp
+// Minimal forward/backward differentiation checks against known gradients or finite
+// differences. A passing smoke does not certify every future tensor operator.
+// Read READING_ORDER.md for related modules and verification expectations.
+
 #include <cmath>
 #include <cstddef>
 
