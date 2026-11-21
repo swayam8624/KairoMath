@@ -1,3 +1,8 @@
+// TEACHING MODULE: Umbrella `export module Kairo.Foundation.Math` re-exports fixed vectors,
+// matrices, TRS, dynamic algebra, autograd, training, statistics and probability.
+// TensorExecution and TensorGPU are separate integration modules needing
+// Scheduler/SIMD/GPU; importing the umbrella does not automatically import
+// or grant those native execution capabilities.
 export module Kairo.Foundation.Math;
 
 export import Kairo.Foundation.Math.Vector;
