@@ -1,3 +1,7 @@
+// TEACHING TEST FILE: Dataset determinism, disjoint split, batch gathering and index provenance
+// smoke checks. It exercises the consumer API without relying on external ML
+// datasets; independent leakage tests are still useful.
+
 #include <algorithm>
 #include <cstddef>
 #include <vector>
