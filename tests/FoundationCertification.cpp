@@ -1,3 +1,8 @@
+// TEACHING TEST FILE: Deterministic certification samples conditioned 3x3 dynamic inverses and
+// TRS world/local round trips over a bounded parameter range. It is not a
+// general proof for singular matrices, unconstrained nonuniform scaling or
+// all floating-point platforms.
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cmath>
