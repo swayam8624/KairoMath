@@ -1,3 +1,9 @@
+# TEACHING VISUAL SERVER: stdlib HTTP bridge for the local math visual lab.
+# It accepts JSON requests and can launch the configured MathVisualizer binary.
+# Do not expose this development server to untrusted networks; it is not a
+# hardened web service. Source is in visual/VisualTests.cpp, while CMake owns
+# the executable build. Starting the server does not run CTest.
+
 import http.server
 import json
 import os
