@@ -62,6 +62,7 @@ export namespace kairo::foundation::math
         /// Input: deterministic seed.
         /// Output: a dataset sharing source tensors with Fisher-Yates reordered
         /// indices.
+        /// TEACHING API: [[nodiscard]] TensorDataset Shuffled( — Reorder sample INDICES with a seeded Fisher–Yates algorithm; underlying sample/label tensors remain shared.
         [[nodiscard]] TensorDataset Shuffled(std::uint64_t seed) const
         {
             TensorDataset result(*this);
@@ -78,6 +79,7 @@ export namespace kairo::foundation::math
         /// Input: validation fraction strictly between zero and one plus seed.
         /// Output: disjoint train and validation index sets covering the source
         /// exactly once. Both partitions are guaranteed non-empty.
+        /// TEACHING API: [[nodiscard]] std::pair<TensorDataset, TensorDataset> Split( — Create disjoint train/validation subsets using the same shuffled index ordering, without copying dataset storage.
         [[nodiscard]] std::pair<TensorDataset, TensorDataset> Split(
             float validationFraction, std::uint64_t seed) const
         {
@@ -103,6 +105,7 @@ export namespace kairo::foundation::math
         /// Input: offset and count in this dataset's index order.
         /// Output: owning contiguous tensors whose leading dimension is count.
         /// Failure: rejects empty or out-of-range requests.
+        /// TEACHING API: [[nodiscard]] TensorBatch Gather( — Materialize a contiguous batch from selected logical indices and include sourceIndices for provenance.
         [[nodiscard]] TensorBatch Gather(std::size_t offset, std::size_t count) const
         {
             if (count == 0 || offset > Size() || count > Size() - offset)
@@ -151,6 +154,7 @@ export namespace kairo::foundation::math
                 throw std::invalid_argument("TensorBatchLoader requires non-zero batch size.");
         }
 
+        /// TEACHING API: [[nodiscard]] std::optional<TensorBatch> Next( — Return next batch or nullopt at exhaustion; final short batch obeys dropLast setting.
         [[nodiscard]] std::optional<TensorBatch> Next()
         {
             if (cursor_ >= dataset_.Size()) return std::nullopt;
@@ -185,6 +189,7 @@ export namespace kairo::foundation::math
     class TensorPrefetchLoader final
     {
     public:
+        /// TEACHING API: TensorPrefetchLoader( — Spawn a bounded producer jthread; cancellation, queue capacity and worker failures must be synchronized at destruction.
         TensorPrefetchLoader(
             TensorDataset dataset,
             std::size_t batchSize,
@@ -233,6 +238,7 @@ export namespace kairo::foundation::math
         TensorPrefetchLoader(const TensorPrefetchLoader&) = delete;
         TensorPrefetchLoader& operator=(const TensorPrefetchLoader&) = delete;
 
+        /// TEACHING API: ~TensorPrefetchLoader( — Stop and join worker on lifetime exit; never let background loading outlive its dataset/state.
         ~TensorPrefetchLoader()
         {
             worker_.request_stop();
