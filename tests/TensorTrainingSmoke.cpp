@@ -1,3 +1,7 @@
+// TEACHING TEST FILE: Optimizer, loss scaling, RNG and checkpoint continuation smoke tests.
+// Repeated ordered parameter state is essential: resuming weights without
+// optimizer moments/step counters changes the training trajectory.
+
 #include <array>
 #include <cmath>
 #include <cstddef>
