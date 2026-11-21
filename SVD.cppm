@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Singular value decomposition supports pseudoinverse/least-squares and numerical rank questions; tie
+// it to DynamicMatrix and LinearSolve rather than treating SVD as a renderer operation.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <algorithm>
