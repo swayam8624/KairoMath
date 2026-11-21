@@ -1,3 +1,8 @@
+// TEACHING MODULE: Factorization algorithms transform a matrix into structured factors:
+// LU/LUP for solves, QR for orthogonal least-squares, Cholesky for symmetric
+// positive definite matrices, and LDLT where supported. Pivoting and
+// singularity thresholds determine numerical reliability; LinearSolve
+// consumes the factorization outputs.
 module;
 
 #include <algorithm>
