@@ -1,3 +1,7 @@
+// TEACHING MODULE: Linear system solvers: forward/back substitution, numerical pivoting
+// and decomposition-backed solve paths. Solving A*x=b is different from
+// forming inv(A); conditioning, near-zero pivots and residual checks matter.
+// Optimization and inverse/least-squares tools consume these methods.
 module;
 
 #include <algorithm>
