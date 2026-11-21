@@ -1,3 +1,8 @@
+// TEACHING MODULE: Stateful optimizer, learning-rate schedule, dynamic loss scaling and
+// checkpoint code for Float32 master parameters. Optimizer state and
+// parameter order/shape must remain stable across resume; Adam and AdamW
+// differ in coupled versus decoupled weight decay. Checkpoint save/restore
+// handles integrity separately from numerical training correctness.
 module;
 
 #include <algorithm>
