@@ -33,6 +33,7 @@ export namespace kairo::foundation::math
 {
     namespace tensor_dtype_detail
     {
+        /// TEACHING API: FloatToHalfBits( — Convert Float32 to IEEE-style 16-bit float bits with rounding and explicit Inf/NaN/subnormal handling; precision is reduced.
         [[nodiscard]] constexpr std::uint16_t FloatToHalfBits(float value) noexcept
         {
             const std::uint32_t bits = std::bit_cast<std::uint32_t>(value);
@@ -354,6 +355,7 @@ export namespace kairo::foundation::math
         /// Input: none.
         /// Output: true if logical row-major order maps to contiguous memory.
         [[nodiscard]]
+        /// TEACHING API: IsContiguous( — Check logical stride layout before using Data() as a packed row-major tensor buffer.
         bool IsContiguous() const noexcept
         {
             return m_offset == 0 && std::ranges::equal(m_strides, MakeContiguousStrides(m_shape));
@@ -453,6 +455,7 @@ export namespace kairo::foundation::math
         /// Task: reshape activations without copying when the tensor is
         /// contiguous.
         [[nodiscard]]
+        /// TEACHING API: Reshape( — Return new shape only when element count matches; noncontiguous views cannot be blindly reinterpreted as dense storage.
         Tensor Reshape(Shape newShape) const
         {
             if (!IsContiguous())
@@ -477,6 +480,7 @@ export namespace kairo::foundation::math
         /// Output: strided view over the requested slice.
         /// Task: support batching and sub-tensor access without copying.
         [[nodiscard]]
+        /// TEACHING API: Slice( — Build a strided subview sharing backing storage; changing data through a view can affect the parent.
         Tensor Slice(std::size_t axis, std::size_t start, std::size_t count) const
         {
             if (axis >= Rank() || start + count > m_shape[axis])
@@ -499,6 +503,7 @@ export namespace kairo::foundation::math
         /// Task: normalize views before passing to kernels that require dense
         /// memory or serialization.
         [[nodiscard]]
+        /// TEACHING API: Contiguous( — Copy logical elements into a new packed buffer, resolving strides for SIMD/GPU/dataset consumers.
         Tensor Contiguous() const
         {
             Tensor result(m_shape);
@@ -550,6 +555,7 @@ export namespace kairo::foundation::math
         /// Input: none.
         /// Output: sum of all logical elements.
         [[nodiscard]]
+        /// TEACHING API: Sum( — Aggregate all logical tensor elements; reduction order affects floating-point roundoff.
         T Sum() const noexcept
         {
             T sum = T(0);
@@ -638,6 +644,7 @@ export namespace kairo::foundation::math
         }
 
         [[nodiscard]]
+        /// TEACHING API: PhysicalOffset( — Map multidimensional indices through stored strides and offset to the underlying physical storage.
         std::size_t PhysicalOffset(std::span<const std::size_t> indices) const noexcept
         {
             assert(indices.size() == m_shape.size());
@@ -674,6 +681,7 @@ export namespace kairo::foundation::math
 
     template<TensorScalar T, typename Fn>
     [[nodiscard]]
+    /// TEACHING API: ElementwiseBinary( — Require compatible shapes and apply an operation to each logical element; broadcasting requires a separate explicit contract.
     Tensor<T> ElementwiseBinary(const Tensor<T>& lhs, const Tensor<T>& rhs, Fn&& op)
     {
         if (!std::ranges::equal(lhs.GetShape(), rhs.GetShape()))
