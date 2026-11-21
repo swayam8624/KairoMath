@@ -231,6 +231,7 @@ export namespace kairo::foundation::math
         /// Output: conjugate (-x, -y, -z, w).
         /// Task: invert a unit quaternion and support general inverse math.
         [[nodiscard]]
+        /// TEACHING API: Conjugate — Negate imaginary xyz and keep w. For a UNIT quaternion, conjugate equals rotational inverse.
         constexpr Quaternion Conjugate() const noexcept
         {
             return { -x, -y, -z, w };
@@ -394,6 +395,7 @@ export namespace kairo::foundation::math
     /// just the conjugate; for non-unit quaternions the length correction matters.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Inverse — General quaternion inverse uses conjugate divided by squared norm, unlike cheap unit-only conjugation.
     Quaternion<T> Inverse(const Quaternion<T>& quaternion) noexcept
     {
         const T lengthSquared = quaternion.LengthSquared();
@@ -543,6 +545,7 @@ export namespace kairo::foundation::math
     /// Conjugate(), so non-unit input still behaves correctly.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Rotate — Rotate a 3D vector by quaternion composition; normalized input is needed to preserve lengths.
     Vector3<T> Rotate(const Quaternion<T>& quaternion, const Vector3<T>& vector) noexcept
     {
         const T lengthSq = quaternion.LengthSquared();
@@ -620,6 +623,7 @@ export namespace kairo::foundation::math
     /// Task: convert orientation to a linear rotation matrix for transform math.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: ToMatrix3 — Convert normalized quaternion into a 3x3 rotation consistent with column-vector matrix multiplication.
     Matrix3<T> ToMatrix3(const Quaternion<T>& quaternion) noexcept
     {
         const Quaternion<T> q = quaternion.Normalized();
@@ -783,6 +787,7 @@ export namespace kairo::foundation::math
     /// Convention: paired with ToEuler(); x is pitch, y is yaw, z is roll.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: FromEuler — Convert ordered angle triplet (radians) to orientation; axis/order convention must agree with the editor/camera.
     Quaternion<T> FromEuler(const Vector3<T>& euler) noexcept
     {
         const T cx = std::cos(euler.x * T(0.5));
@@ -842,6 +847,7 @@ export namespace kairo::foundation::math
     /// Task: fast rotation interpolation for animation/camera smoothing.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: NLerp — Normalize a linear blend; cheaper than SLerp but does not keep constant angular speed.
     Quaternion<T> NLerp(const Quaternion<T>& lhs, const Quaternion<T>& rhs, T alpha) noexcept
     {
         Quaternion<T> end = rhs;
@@ -858,6 +864,7 @@ export namespace kairo::foundation::math
     /// Task: constant-angular-velocity interpolation for rotations.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: SLerp — Choose shortest quaternion hemisphere, use spherical interpolation, and fall back to NLerp near equal orientations.
     Quaternion<T> SLerp(const Quaternion<T>& lhs, const Quaternion<T>& rhs, T alpha) noexcept
     {
         Quaternion<T> end = rhs;
