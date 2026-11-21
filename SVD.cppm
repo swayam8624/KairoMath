@@ -44,6 +44,7 @@ export namespace kairo::foundation::math
     /// using alternating left and right Householder reflections.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: GolubKahanBidiagonalization — Reduce a rectangular matrix to bidiagonal structure using left/right orthogonal reflectors.
     BidiagonalResult<T> GolubKahanBidiagonalization(const DynamicMatrix<T>& A)
     {
         std::size_t m = A.Rows();
@@ -198,6 +199,7 @@ export namespace kairo::foundation::math
     /// and symmetric tridiagonal QR eigenvalues.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: SingularValueDecomposition — Construct thin A≈U*diag(sigma)*V^T and sort singular directions for rank-aware operations.
     SVDResult<T> SingularValueDecomposition(const DynamicMatrix<T>& A)
     {
         std::size_t m = A.Rows();
@@ -335,6 +337,7 @@ export namespace kairo::foundation::math
     /// Compute Moore-Penrose Pseudo-Inverse A^+ using SVD.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: PseudoInverse — Invert only singular values exceeding a threshold; near-null directions must not explode into noise.
     DynamicMatrix<T> PseudoInverse(const DynamicMatrix<T>& A)
     {
         std::size_t m = A.Rows();
@@ -393,6 +396,7 @@ export namespace kairo::foundation::math
     /// Compute Low Rank Approximation of matrix A with rank k.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: LowRankApproximation — Truncate SVD to requested rank: the best Frobenius-norm rank-k approximation under ideal SVD.
     DynamicMatrix<T> LowRankApproximation(const DynamicMatrix<T>& A, std::size_t rank)
     {
         std::size_t m = A.Rows();
@@ -454,6 +458,7 @@ export namespace kairo::foundation::math
     /// Compute 2-norm Condition Number of a matrix using SVD.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: ConditionNumber — Compare largest to smallest retained singular values; large ratios amplify input error.
     T ConditionNumber(const DynamicMatrix<T>& A)
     {
         if (A.Empty()) return T(1);
