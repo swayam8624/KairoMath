@@ -1,3 +1,9 @@
+// TEACHING MAP — Decomposition.cppm
+// Matrix decomposition algorithms used by Eigen, SVD, PCA and optimization. Shape
+// requirements, tolerance, rank deficiency and workspace ownership are part of the public
+// numerical API.
+// Read READING_ORDER.md for math conventions, caller modules and related tests.
+
 module;
 
 #include <algorithm>
