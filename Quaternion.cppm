@@ -1,3 +1,7 @@
+// TEACHING MODULE: Unit quaternion rotations stored (x,y,z,w) and composed by quaternion
+// multiplication. Quaternion norm matters: a nonunit quaternion does not
+// describe a pure rotation without normalization. Transform and PhysicsMath
+// consume quaternion-to-matrix conversions; animation uses SLerp/NLerp.
 module;
 
 #include <cassert>
