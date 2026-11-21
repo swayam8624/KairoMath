@@ -1,3 +1,8 @@
+// TEACHING MAP — tests/TensorDataSmoke.cpp
+// Checks tensor allocation, shape, stride, view/copy and data-lifetime invariants consumed
+// by execution and gradient modules.
+// Read READING_ORDER.md for related modules and verification expectations.
+
 #include <algorithm>
 #include <cstddef>
 #include <vector>
