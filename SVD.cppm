@@ -1,3 +1,7 @@
+// TEACHING MODULE: Singular value decomposition A=U*diag(sigma)*V^T and pseudoinverse
+// for rank-deficient least-squares. Singular-value thresholding defines which
+// directions are retained. Statistics/PCA and numerical optimization consume
+// these tools; near-rank deficiency requires condition-number awareness.
 module;
 
 #include <algorithm>
