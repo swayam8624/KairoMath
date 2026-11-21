@@ -1,3 +1,7 @@
+// TEACHING TEST FILE: Standalone Float16/bfloat16 round-trip and low-precision arithmetic checks.
+// Distinct tolerances are expected because bfloat16 has fewer mantissa bits;
+// dtype conversion correctness is separate from backend performance.
+
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
