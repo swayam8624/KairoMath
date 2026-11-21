@@ -34,6 +34,7 @@ export namespace kairo::foundation::math
     /// Assumes samples are rows, features are columns.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: CovarianceMatrix — Center each feature column; rows are observations. Sample covariance divides by n-1.
     DynamicMatrix<T> CovarianceMatrix(const DynamicMatrix<T>& X)
     {
         std::size_t n = X.Rows();
@@ -79,6 +80,7 @@ export namespace kairo::foundation::math
     /// Compute the Correlation Matrix of a dataset X (N samples x M features).
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: CorrelationMatrix — Normalize covariance by feature standard deviations; zero-variance features need explicit handling.
     DynamicMatrix<T> CorrelationMatrix(const DynamicMatrix<T>& X)
     {
         DynamicMatrix<T> cov = CovarianceMatrix(X);
@@ -111,6 +113,7 @@ export namespace kairo::foundation::math
     /// Run Principal Component Analysis (PCA) on a dataset X (N samples x M features).
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: PCA — Find principal directions of centered sample covariance; eigenvector signs are arbitrary and variance is ordered.
     PCAResult<T> PCA(const DynamicMatrix<T>& X)
     {
         // 1. Covariance matrix
@@ -147,6 +150,7 @@ export namespace kairo::foundation::math
     /// Fits model X * beta = y, returning beta vector.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: LinearRegression — Use pseudoinverse to estimate least-squares coefficients, but evaluate on held-out data to avoid leakage.
     std::vector<T> LinearRegression(const DynamicMatrix<T>& X, const std::vector<T>& y)
     {
         std::size_t n = X.Rows();
