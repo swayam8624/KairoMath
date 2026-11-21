@@ -1,3 +1,7 @@
+// TEACHING MODULE: Explicit stateful pseudo-random generator and distribution helpers.
+// An RNG seed supports reproducibility without global mutable state; draw
+// order and generator implementation still matter. Sampling APIs do not
+// create cryptographic randomness or eliminate statistical variance.
 module;
 
 #include <algorithm>
