@@ -41,6 +41,7 @@ export namespace kairo::foundation::math
     /// Power Iteration to find the dominant eigenvalue and its corresponding eigenvector.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: PowerIteration — Iterate and normalize A*v to approximate dominant eigenpair; convergence depends on spectral gap.
     PowerIterationResult<T> PowerIteration(
         const DynamicMatrix<T>& A,
         std::size_t maxIterations = 1000,
@@ -124,6 +125,7 @@ export namespace kairo::foundation::math
     /// Inverse Power Iteration to find the eigenvalue closest to zero.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: InversePowerIteration — Approximate a small-magnitude eigenpair by solving systems with A rather than explicit inversion.
     PowerIterationResult<T> InversePowerIteration(
         const DynamicMatrix<T>& A,
         std::size_t maxIterations = 1000,
@@ -215,6 +217,7 @@ export namespace kairo::foundation::math
     /// Shifted Inverse Power Iteration to find the eigenvalue closest to a target shift value.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: ShiftedInversePowerIteration — Shift around target eigenvalue and repeatedly solve (A-shift*I)*x=v to find a nearby eigenpair.
     PowerIterationResult<T> ShiftedInversePowerIteration(
         const DynamicMatrix<T>& A,
         T shift,
@@ -251,6 +254,7 @@ export namespace kairo::foundation::math
     /// Reduce a symmetric matrix to symmetric tridiagonal form using Householder reflections.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: HouseholderTridiagonalization — For symmetric matrices, orthogonal reflections reduce A to tridiagonal form for QR iterations.
     TridiagonalResult<T> HouseholderTridiagonalization(const DynamicMatrix<T>& A)
     {
         if (A.Rows() != A.Columns())
@@ -357,6 +361,7 @@ export namespace kairo::foundation::math
 
     /// Run one Implicit QR step on symmetric tridiagonal matrix T_mat and eigenvectors V.
     template<typename T>
+    /// TEACHING API: ImplicitQRStep — Advance a shifted QR step while updating accumulated eigenvectors; preserves similarity in exact arithmetic.
     void ImplicitQRStep(DynamicMatrix<T>& T_mat, DynamicMatrix<T>& V, std::size_t l, std::size_t m)
     {
         T d1 = T_mat(m - 1, m - 1);
@@ -420,6 +425,7 @@ export namespace kairo::foundation::math
     /// Find all eigenvalues and eigenvectors of a symmetric matrix using Tridiagonalization and Implicit QR.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: QREigenVectors — Extract eigenvectors/eigenvalues from repeated tridiagonal QR steps; verify residual and orthogonality.
     QREigenResult<T> QREigenVectors(
         const DynamicMatrix<T>& A,
         std::size_t maxIterations = 1000,
@@ -501,6 +507,7 @@ export namespace kairo::foundation::math
     /// Find eigenvalues of a symmetric matrix.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: QREigenValues — Return eigenvalues without requiring callers to manage the full eigenvector representation.
     std::vector<T> QREigenValues(
         const DynamicMatrix<T>& A,
         std::size_t maxIterations = 1000,
