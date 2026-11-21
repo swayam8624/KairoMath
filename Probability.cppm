@@ -44,6 +44,7 @@ export namespace kairo::foundation::math
         /// Input: seed value.
         /// Output: none; resets the internal engine state.
         /// Task: allow deterministic replay of sampling-heavy tests or tools.
+        /// TEACHING API: Seed( — Reset MT19937_64 engine state. The same seed and draw sequence reproduce sampling only with consistent distribution implementation.
         void Seed(std::uint64_t seed)
         {
             m_engine.seed(seed);
@@ -73,6 +74,7 @@ export namespace kairo::foundation::math
         /// Task: provide deterministic integer sampling for algorithms that need
         /// random indices, bootstrap resampling, or randomized tests.
         [[nodiscard]]
+        /// TEACHING API: UniformUInt( — Sample integer range using std::uniform_int_distribution; bounds and draw count control reproducibility.
         std::uint64_t UniformUInt(
             std::uint64_t minValue,
             std::uint64_t maxValue)
@@ -95,6 +97,7 @@ export namespace kairo::foundation::math
         /// for data-driven ranges.
         template<FloatingPoint T>
         [[nodiscard]]
+        /// TEACHING API: UniformReal( — Sample real interval using std::uniform_real_distribution; endpoints follow the standard distribution contract.
         T UniformReal(
             T minValue = T(0),
             T maxValue = T(1))
@@ -174,6 +177,7 @@ export namespace kairo::foundation::math
         /// Input: none.
         /// Output: distribution variance.
         [[nodiscard]]
+        /// TEACHING API: Variance( — Measure spread around sample mean with the chosen normalization; downstream statistics must use a consistent convention.
         constexpr T Variance() const noexcept
         {
             const T width =
@@ -206,6 +210,7 @@ export namespace kairo::foundation::math
         /// Output: validated normal distribution.
         /// Task: reject invalid scale as public runtime input.
         NormalDistribution(T mean = T(0), T standardDeviation = T(1))
+            /// TEACHING API: Mean( — Compute sample average; guard empty samples and distinguish mean from expected value of a known distribution.
             : Mean(mean)
             , StandardDeviation(standardDeviation)
         {
@@ -439,6 +444,7 @@ export namespace kairo::foundation::math
     /// heavyweight distribution object for one-off choices.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: SampleWeightedIndex( — Select a categorical index proportional to nonnegative weights; zero total weight is invalid.
     std::size_t SampleWeightedIndex(
         const std::vector<T>& weights,
         RandomGenerator& generator)
