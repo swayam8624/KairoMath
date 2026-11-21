@@ -1,3 +1,4 @@
+// TEACHING MAP: C++23 vector primitives and low-level numeric conventions. Matrix, Quaternion, Transform, Geometry, Spatial and PhysicsMath depend on these components; verify normalization, precision and API storage assumptions through tests.
 module;
 
 #include <cassert>
