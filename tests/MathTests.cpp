@@ -28,6 +28,7 @@ import Kairo.Foundation.Math.Probability;
 
 using namespace kairo::foundation::math;
 
+// TEACHING TEST: Verify dot(v,axis)/dot(axis,axis) instead of assuming unit axes.
 TEST_CASE("Vector Project with non-unit axes", "[Vector]")
 {
     SECTION("2D Projection on non-unit axis")
@@ -63,6 +64,7 @@ TEST_CASE("Vector Project with non-unit axes", "[Vector]")
     }
 }
 
+// TEACHING TEST: Exercise shape-aware tensor operations for image-like values and border cases.
 TEST_CASE("Tensor visual-computing kernels", "[Tensor][Vision]")
 {
     SECTION("NHWC valid convolution and max pooling preserve explicit layout")
@@ -84,6 +86,7 @@ TEST_CASE("Tensor visual-computing kernels", "[Tensor][Vision]")
     }
 }
 
+// TEACHING TEST: Check normalized Snell input, refraction sign and total internal reflection fallback.
 TEST_CASE("Vector Refract edge cases", "[Vector]")
 {
     SECTION("Normal incidence no refraction deflection")
@@ -128,6 +131,7 @@ TEST_CASE("Vector Refract edge cases", "[Vector]")
     }
 }
 
+// TEACHING TEST: Verify matrix multiplication with inverse; singular fallback is not a mathematically valid inverse.
 TEST_CASE("Matrix4 Inverse correctness", "[Matrix]")
 {
     SECTION("Translation-only matrix inverse")
@@ -194,6 +198,7 @@ TEST_CASE("Matrix4 Inverse correctness", "[Matrix]")
     }
 }
 
+// TEACHING TEST: Check TRS inverse and local/world conversion within supported uniform-scale domain.
 TEST_CASE("Transform Inverse and WorldToLocal", "[Transform]")
 {
     SECTION("Uniform scale Transform Inverse")
@@ -232,6 +237,7 @@ TEST_CASE("Transform Inverse and WorldToLocal", "[Transform]")
     }
 }
 
+// TEACHING TEST: Check fixed-size values, memory access and operator semantics.
 TEST_CASE("Matrix2 and New Matrix/Vector methods", "[Matrix][Vector]")
 {
     SECTION("Matrix2 Basics")
@@ -352,6 +358,7 @@ TEST_CASE("Matrix2 and New Matrix/Vector methods", "[Matrix][Vector]")
     }
 }
 
+// TEACHING TEST: Check heap-backed shape, indexing, multiply and transpose contracts.
 TEST_CASE("DynamicMatrix Core Features", "[DynamicMatrix]")
 {
     SECTION("Constructors and Access")
@@ -499,6 +506,7 @@ TEST_CASE("DynamicMatrix Core Features", "[DynamicMatrix]")
     }
 }
 
+// TEACHING TEST: Solve linear systems and verify residuals against expected results.
 TEST_CASE("LinearSolve Phase 1", "[LinearSolve]")
 {
     SECTION("Forward and Backward Substitution")
@@ -575,6 +583,7 @@ TEST_CASE("LinearSolve Phase 1", "[LinearSolve]")
     }
 }
 
+// TEACHING TEST: Check factorization reconstruction and pivot/permutation behavior.
 TEST_CASE("Decomposition Phase 2", "[Decomposition]")
 {
     SECTION("LU and LUP")
@@ -675,6 +684,7 @@ TEST_CASE("Decomposition Phase 2", "[Decomposition]")
     }
 }
 
+// TEACHING TEST: Check eigenpair convergence, residual and numerical tolerance.
 TEST_CASE("Eigen Phase 3", "[Eigen]")
 {
     SECTION("Power Iterations")
@@ -715,6 +725,7 @@ TEST_CASE("Eigen Phase 3", "[Eigen]")
     }
 }
 
+// TEACHING TEST: Check U/Sigma/V reconstruction and pseudoinverse behavior.
 TEST_CASE("SVD Phase 4", "[SVD]")
 {
     SECTION("Singular Value Decomposition")
@@ -754,6 +765,7 @@ TEST_CASE("SVD Phase 4", "[SVD]")
     }
 }
 
+// TEACHING TEST: Check samples-as-rows covariance, PCA and regression results.
 TEST_CASE("Statistics Phase 5", "[Statistics]")
 {
     SECTION("Covariance and Correlation")
@@ -802,6 +814,7 @@ TEST_CASE("Statistics Phase 5", "[Statistics]")
     }
 }
 
+// TEACHING TEST: Regression checks for previously discovered matrix/eigen/shape defects.
 TEST_CASE("Linear Algebra Bugfixes", "[LinearAlgebraBugfixes]")
 {
     SECTION("Vector LengthInverse Zero Guard")
@@ -868,6 +881,7 @@ TEST_CASE("Linear Algebra Bugfixes", "[LinearAlgebraBugfixes]")
     }
 }
 
+// TEACHING TEST: Check malformed dimensions and invalid parameters are rejected before unsafe operations.
 TEST_CASE("Dynamic API Validation Policy", "[DynamicMatrix][Tensor][Validation]")
 {
     SECTION("DynamicMatrix rejects partial-empty and mismatched dimensions")
@@ -959,6 +973,7 @@ TEST_CASE("Dynamic API Validation Policy", "[DynamicMatrix][Tensor][Validation]"
     }
 }
 
+// TEACHING TEST: Check rank, inverse and conditioning policy on matrices of different properties.
 TEST_CASE("DynamicMatrix Upgrades - Rank, Determinant, Inverse, ConditionNumber", "[DynamicMatrix][Upgrades]")
 {
     SECTION("Determinant")
@@ -1031,6 +1046,7 @@ TEST_CASE("DynamicMatrix Upgrades - Rank, Determinant, Inverse, ConditionNumber"
     }
 }
 
+// TEACHING TEST: Exercise more difficult decomposition paths and numeric reconstruction.
 TEST_CASE("Eigen and SVD Advanced Decompositions", "[LinearAlgebra][Decompositions]")
 {
     SECTION("Householder Tridiagonalization")
@@ -1091,6 +1107,7 @@ TEST_CASE("Eigen and SVD Advanced Decompositions", "[LinearAlgebra][Decompositio
     }
 }
 
+// TEACHING TEST: Check matrix exponential behavior against known analytic identities.
 TEST_CASE("Matrix Functions Phase 6", "[LinearAlgebra][MatrixFunctions]")
 {
     SECTION("Matrix exponential of zero is identity")
@@ -1174,6 +1191,7 @@ TEST_CASE("Matrix Functions Phase 6", "[LinearAlgebra][MatrixFunctions]")
     }
 }
 
+// TEACHING TEST: Check convergence/step policies on selected objectives; not global optimality.
 TEST_CASE("Optimization Phase C", "[Optimization]")
 {
     auto column = [](std::initializer_list<double> values)
@@ -1514,6 +1532,7 @@ TEST_CASE("Optimization Phase C", "[Optimization]")
     }
 }
 
+// TEACHING TEST: Check deterministic draws and distribution moment/sample behavior.
 TEST_CASE("Probability Phase D", "[Probability][Statistics]")
 {
     SECTION("Distributions expose analytic density, CDF, moments, and validation")
