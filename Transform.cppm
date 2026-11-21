@@ -1,3 +1,7 @@
+// TEACHING MODULE: Scene-friendly translation/rotation/scale (TRS) representation.
+// Matrix conversion composes transforms for renderer/editor and hierarchical
+// scene nodes. Nonuniform scale with rotation can produce shear when composed,
+// so arbitrary matrix products cannot always be losslessly stored as TRS.
 module;
 
 #include <cassert>
