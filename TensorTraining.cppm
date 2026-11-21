@@ -52,6 +52,7 @@ export namespace kairo::foundation::math
         std::uint64_t decaySteps = 1;
         std::uint64_t warmupSteps = 0;
 
+        /// TEACHING API: [[nodiscard]] float Rate( — Compute schedule value from completed optimizer steps, including warmup and configured decay; step count must be checkpointed.
         [[nodiscard]] float Rate(std::uint64_t completedSteps) const
         {
             if (!(baseRate > 0.0f) || minimumRate < 0.0f || minimumRate > baseRate)
@@ -130,6 +131,7 @@ export namespace kairo::foundation::math
         /// implicit gradient clearing.
         /// Failure: rejects absent gradients, non-trainable variables, shape
         /// drift, non-finite norms, and invalid hyperparameters before mutation.
+        /// TEACHING API: void Step(std::span<Variable*> — Perform one stateful parameter update with optimizer moments, clipping and decay; does not clear gradients implicitly.
         void Step(std::span<Variable*> parameters, float gradientDivisor = 1.0f)
         {
             if (parameters.empty()) throw std::invalid_argument("Optimizer Step requires parameters.");
@@ -220,6 +222,7 @@ export namespace kairo::foundation::math
             };
         }
 
+        /// TEACHING API: void Restore(const TensorOptimizerState& — Validate parameter count/shape and restore moments and step counter consistently.
         void Restore(const TensorOptimizerState& state, std::span<Variable*> parameters)
         {
             ValidateConfig(state.config);
@@ -326,11 +329,13 @@ export namespace kairo::foundation::math
             return finiteSteps_;
         }
 
+        /// TEACHING API: void Backward(const Variable& — Scale the scalar loss before backpropagation to reduce small-gradient underflow in mixed-precision workflows.
         void Backward(const Variable& scalarLoss) const
         {
             scalarLoss.Backward(scale_);
         }
 
+        /// TEACHING API: [[nodiscard]] bool Step(TensorOptimizer& — Check scaled gradients for finite values before optimizer mutation; reject/adjust scale on overflow.
         [[nodiscard]] bool Step(TensorOptimizer& optimizer, std::span<Variable*> parameters)
         {
             bool finite = true;
@@ -489,6 +494,7 @@ namespace kairo::foundation::math::training_checkpoint_detail
 
 namespace kairo::foundation::math
 {
+    /// TEACHING API: inline void TensorTrainingCheckpoint::Save( — Write versioned parameter and optimizer state to sibling temporary file before rename; output is not portable to arbitrary architectures without schema checks.
     inline void TensorTrainingCheckpoint::Save(
         const std::filesystem::path& path,
         std::span<Variable* const> parameters,
@@ -542,6 +548,7 @@ namespace kairo::foundation::math
         }
     }
 
+    /// TEACHING API: inline void TensorTrainingCheckpoint::Load( — Validate the whole checkpoint payload and current parameter shapes before applying state; avoid partial restoration on corruption.
     inline void TensorTrainingCheckpoint::Load(
         const std::filesystem::path& path,
         std::span<Variable*> parameters,
