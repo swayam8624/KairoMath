@@ -62,6 +62,7 @@ export namespace kairo::foundation::math
     /// values in Householder-style algorithms.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: RobustNorm2 — Scale accumulation to avoid overflow/underflow while computing Euclidean norm in Householder transforms.
     T RobustNorm2(const std::vector<T>& values) noexcept
     {
         T norm = T(0);
@@ -160,6 +161,7 @@ export namespace kairo::foundation::math
     /// Assumes no pivoting is needed. Throws if a zero pivot is encountered.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: LU — Factor A=L*U without pivoting; unstable when leading pivots are near zero. LUP is safer for general solves.
     LUResult<T> LU(const DynamicMatrix<T>& A)
     {
         if (A.Rows() != A.Columns())
@@ -206,6 +208,7 @@ export namespace kairo::foundation::math
     /// Performs partial pivoting.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: LUP — Pivot rows to factor P*A=L*U, recording permutation to preserve equation order in solves.
     LUPResult<T> LUP(const DynamicMatrix<T>& A)
     {
         if (A.Rows() != A.Columns())
@@ -291,6 +294,7 @@ export namespace kairo::foundation::math
     /// Works for general m x n matrices (m >= n).
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: QR — Use orthogonal transformations to get A=Q*R; supports least squares and eigen iterations.
     QRResult<T> QR(const DynamicMatrix<T>& A)
     {
         std::size_t m = A.Rows();
@@ -378,6 +382,7 @@ export namespace kairo::foundation::math
     /// Matrix A must be symmetric positive-definite.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Cholesky — Factor symmetric positive-definite A=L*L^T; nonpositive pivots violate this algorithm's domain.
     DynamicMatrix<T> Cholesky(const DynamicMatrix<T>& A)
     {
         if (A.Rows() != A.Columns())
@@ -430,6 +435,7 @@ export namespace kairo::foundation::math
     /// Matrix A must be symmetric positive-semidefinite (or indefinite, but requires positive pivots).
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: LDLT — Factor a symmetric matrix into L*D*L^T; check symmetry and numerical pivots before using in solver.
     LDLTResult<T> LDLT(const DynamicMatrix<T>& A)
     {
         if (A.Rows() != A.Columns())
@@ -508,6 +514,7 @@ export namespace kairo::foundation::math
     /// Compute determinant of a square matrix using LUP decomposition.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Determinant — Use decomposition and permutation sign to compute determinant for dynamic matrices, not recursive minors.
     T Determinant(const DynamicMatrix<T>& A)
     {
         if (A.Rows() != A.Columns())
