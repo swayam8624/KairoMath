@@ -1,3 +1,8 @@
+// TEACHING MODULE: KairoScheduler and KairoSIMD integration for selected elementwise,
+// reduction and rank-two Tensor kernels. Scheduler partitions disjoint
+// output spans; reductions use deterministic ordered combination when
+// supported. This is a separately imported execution module, not a blanket
+// replacement for every Tensor operation.
 module;
 
 #include <algorithm>
