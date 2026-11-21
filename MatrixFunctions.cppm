@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Higher-level mathematical matrix functions depend on the base Matrix/DynamicMatrix layers and
+// decomposition/linear-solve conventions.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <cmath>
