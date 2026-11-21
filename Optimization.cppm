@@ -1,3 +1,7 @@
+// TEACHING MODULE: Deterministic optimization routines and common settings for gradients,
+// step size and stopping rules. Armijo/backtracking protects some updates,
+// but convergence is problem-dependent. Callers must keep objective/gradient
+// and data-split conventions consistent; this is not proof of global optimum.
 module;
 
 #include <algorithm>
