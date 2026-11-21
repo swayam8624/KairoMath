@@ -1216,6 +1216,7 @@ export namespace kairo::foundation::math
     /// direction, negative means opposite, zero means perpendicular.
     template<Arithmetic T>
     [[nodiscard]]
+    /// TEACHING API: Dot — Inner product: length projection and cosine calculations depend on a consistent metric and component order.
     constexpr T Dot(const Vector2<T>& lhs, const Vector2<T>& rhs) noexcept
     {
         return (lhs.x * rhs.x) + (lhs.y * rhs.y);
@@ -1245,6 +1246,7 @@ export namespace kairo::foundation::math
     /// orientation tests.
     template<Arithmetic T>
     [[nodiscard]]
+    /// TEACHING API: Cross — 3D cross product uses right-hand orientation; its direction matters for triangle winding, torque and camera bases.
     constexpr Vector3<T> Cross(const Vector3<T>& lhs, const Vector3<T>& rhs) noexcept
     {
         return
@@ -1387,6 +1389,7 @@ export namespace kairo::foundation::math
     /// fixed epsilon.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: NearlyEqual — Floating-point comparisons use tolerance instead of exact equality; tolerance choice determines scale sensitivity.
     constexpr bool NearlyEqual(
         T lhs,
         T rhs,
@@ -1730,6 +1733,7 @@ export namespace kairo::foundation::math
     /// Task: normalize safely when zero has semantic meaning chosen by caller.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: SafeNormalize — Normalize when magnitude exceeds epsilon; otherwise return caller's fallback to avoid NaNs from zero vectors.
     Vector2<T> SafeNormalize(
         const Vector2<T>& vector,
         const Vector2<T>& fallback = Vector2<T>::Zero()) noexcept
@@ -1783,6 +1787,7 @@ export namespace kairo::foundation::math
     /// not, the result is physically wrong and may hide bugs in PBR code.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Refract — Apply Snell's law with eta=n1/n2; total internal reflection currently returns zero vector, not an optional flag.
     Vector2<T> Refract(
         const Vector2<T>& incident,
         const Vector2<T>& normal,
@@ -1851,6 +1856,7 @@ export namespace kairo::foundation::math
     /// Task: mirror a direction around a normal for lighting and ray bounces.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Reflect — Mirror incident vector about a normal: v-2*dot(v,n)*n, assuming a unit normal.
     constexpr Vector2<T> Reflect(const Vector2<T>& vector, const Vector2<T>& normal) noexcept
     {
         return vector - ((T(2) * Dot(vector, normal)) * normal);
@@ -1882,6 +1888,7 @@ export namespace kairo::foundation::math
     /// not need to be normalized; zero-length axes return zero.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Project — Project onto an arbitrary nonunit axis using dot(v,a)/dot(a,a); degenerate axis returns zero.
     constexpr Vector2<T> Project(const Vector2<T>& vector, const Vector2<T>& onto) noexcept
     {
         const T denominator = Dot(onto, onto);
@@ -1932,6 +1939,7 @@ export namespace kairo::foundation::math
     /// Task: subtract the projected component from the original vector.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Reject — Subtract the axis projection from the original vector, preserving perpendicular component.
     constexpr Vector2<T> Reject(const Vector2<T>& vector, const Vector2<T>& onto) noexcept
     {
         return vector - Project(vector, onto);
@@ -2048,6 +2056,7 @@ export namespace kairo::foundation::math
     /// future Foundation.Math.Interpolation module, not in Vector.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Lerp — Linear interpolation a+(b-a)*alpha; alpha outside [0,1] extrapolates unless caller clamps it.
     constexpr Vector2<T> Lerp(const Vector2<T>& a, const Vector2<T>& b, T alpha) noexcept
     {
         return a + ((b - a) * alpha);
