@@ -1,3 +1,9 @@
+// TEACHING MAP — tests/FoundationCertification.cpp
+// Numerical safety/regression tests for foundational math identities, coordinate conventions
+// and pathological cases. Downstream geometry/physics cannot assume stronger guarantees than
+// these tests verify.
+// Read READING_ORDER.md for related modules and verification expectations.
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cmath>
