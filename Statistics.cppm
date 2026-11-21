@@ -1,3 +1,7 @@
+// TEACHING MODULE: Dataset convention: samples are ROWS and features are COLUMNS.
+// Covariance/correlation, PCA and regression use dynamic matrices plus
+// decomposition/eigen/SVD routines. Centering, normalization and training-
+// validation separation are required to avoid incorrect analysis.
 module;
 
 #include <algorithm>
