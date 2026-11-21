@@ -1,3 +1,9 @@
+// TEACHING MAP — TensorAutograd.cppm
+// Reverse-mode differentiation graph for Tensor operations. TensorExecution performs
+// forward calculations, while gradients are accumulated along operation dependencies;
+// beware aliasing, multiple uses and shared ancestors.
+// See READING_ORDER.md for downstream APIs, numerical assumptions and tests.
+
 module;
 
 #include <algorithm>
