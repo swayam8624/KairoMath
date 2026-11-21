@@ -1,3 +1,9 @@
+// TEACHING VISUAL FILE: Educational ASCII/SVG/HTML visualizer converts
+// KairoMath vector, matrix, quaternion, transform and numerical results into
+// inspectable diagrams. The Canvas/renderer is a demonstration surface, not
+// KairoRenderer's Vulkan/Metal real-time rendering backend. Generated output
+// must not be used alone as a correctness test.
+
 #include <iostream>
 #include <fstream>
 #include <vector>
