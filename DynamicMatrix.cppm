@@ -1,3 +1,7 @@
+// TEACHING MODULE: Heap-owning row-major matrix with explicit rows/columns and checked shape.
+// LinearSolve, QR/SVD/Eigen, optimization and statistics consume this type;
+// unlike fixed Mat4 it may allocate/reallocate. Validate shapes and overflow
+// before using Data() spans or mixing matrix and tensor layouts.
 module;
 
 #include <algorithm>
