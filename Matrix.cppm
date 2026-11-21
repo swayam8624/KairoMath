@@ -1061,6 +1061,7 @@ export namespace kairo::foundation::math
     /// Output: transpose where rows and columns are swapped.
     template<Arithmetic T>
     [[nodiscard]]
+    /// TEACHING API: Transpose — Swap rows and columns; orthogonal rotation inverse equals transpose only for an orthonormal basis.
     constexpr Matrix2<T> Transpose(const Matrix2<T>& matrix) noexcept
     {
         return
@@ -1343,6 +1344,7 @@ export namespace kairo::foundation::math
     /// Output: determinant.
     template<Arithmetic T>
     [[nodiscard]]
+    /// TEACHING API: Determinant — Determinant controls invertibility and signed orientation/volume scaling; near-zero values are numerically dangerous.
     constexpr T Determinant(const Matrix2<T>& matrix) noexcept
     {
         return matrix(0, 0) * matrix(1, 1) - matrix(0, 1) * matrix(1, 0);
@@ -1374,6 +1376,7 @@ export namespace kairo::foundation::math
     /// Output: inverse matrix, or identity when singular.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Inverse — Current fixed-matrix inverse asserts on singular input but returns identity in fallback when assertions are off; that is not a valid mathematical inverse. Check determinant before calling.
     constexpr Matrix2<T> Inverse(const Matrix2<T>& matrix) noexcept
     {
         const T determinant = Determinant(matrix);
@@ -1709,6 +1712,7 @@ export namespace kairo::foundation::math
     /// Task: transform a position using homogeneous w = 1, so translation affects it.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: TransformPoint — Use homogeneous w=1 so translation affects the point; this helper returns xyz without perspective divide.
     constexpr Vector3<T> TransformPoint(const Matrix4<T>& matrix, const Vector3<T>& point) noexcept
     {
         const Vector4<T> result = matrix * Vector4<T>{ point, T(1) };
@@ -1720,6 +1724,7 @@ export namespace kairo::foundation::math
     /// Task: transform a vector using homogeneous w = 0, so translation is ignored.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: TransformDirection — Use homogeneous w=0 so translation is ignored. Surface normals under nonuniform scale require inverse-transpose.
     constexpr Vector3<T> TransformDirection(const Matrix4<T>& matrix, const Vector3<T>& direction) noexcept
     {
         const Vector4<T> result = matrix * Vector4<T>{ direction, T(0) };
@@ -1759,6 +1764,7 @@ export namespace kairo::foundation::math
     /// positive planes, aspect ratio, and non-zero near/far separation.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Perspective — Construct perspective projection with Kairo column-vector convention and depth [0,1]; near/far validation relies on assertions in this helper.
     Matrix4<T> Perspective(
         T fieldOfViewRadians,
         T aspectRatio,
@@ -1785,6 +1791,7 @@ export namespace kairo::foundation::math
     /// Task: build an orthographic camera/projection matrix for Vulkan-style depth.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Orthographic — Map a view box to clip space with the same handedness/depth convention as the perspective projection.
     Matrix4<T> Orthographic(
         T left,
         T right,
