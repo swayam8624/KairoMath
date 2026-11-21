@@ -1,3 +1,7 @@
+// TEACHING MODULE: Bounded KairoGPU Float32 tensor bridge using explicit device buffers,
+// upload, kernel dispatch and readback. Host tensors remain owned/contiguous;
+// GPU buffers and synchronization belong to Kairo.GPU. Selected Add/MatMul
+// functionality is not equivalent to persistent-residency transformer training.
 module;
 
 #include <cstddef>
