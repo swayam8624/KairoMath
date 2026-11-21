@@ -33,6 +33,7 @@ export namespace kairo::foundation::math
         std::vector<T> m_data;
 
         [[nodiscard]]
+        /// TEACHING API: CheckedElementCount — Validate both shape dimensions are zero or nonzero together and guard rows*cols against size_t overflow.
         static std::size_t CheckedElementCount(std::size_t rows, std::size_t cols)
         {
             if ((rows == 0) != (cols == 0))
@@ -49,6 +50,7 @@ export namespace kairo::foundation::math
         }
 
         [[nodiscard]]
+        /// TEACHING API: CheckedOffset — Bounds-check row/column before computing row*columnCount+column in row-major storage.
         std::size_t CheckedOffset(std::size_t row, std::size_t col) const
         {
             if (row >= m_rows || col >= m_cols)
@@ -295,6 +297,7 @@ export namespace kairo::foundation::math
 
         /// Create an identity matrix of size x size.
         [[nodiscard]]
+        /// TEACHING API: Identity — Create square diagonal-one matrix, used as neutral transform and factorization baseline.
         static DynamicMatrix Identity(std::size_t size)
         {
             DynamicMatrix result(size, size, T(0));
@@ -323,6 +326,7 @@ export namespace kairo::foundation::math
         //=========================================================
 
         /// Swap contents of row r1 and row r2.
+        /// TEACHING API: SwapRows — Row exchange supports pivoted elimination; swapping affects determinant sign and decomposition permutation state.
         constexpr void SwapRows(std::size_t r1, std::size_t r2) noexcept
         {
             assert(r1 < m_rows);
@@ -354,6 +358,7 @@ export namespace kairo::foundation::math
 
         /// Compute transpose of this matrix.
         [[nodiscard]]
+        /// TEACHING API: Transpose — Allocate transposed row-major output and exchange index order; do not reinterpret underlying Data() in place.
         DynamicMatrix Transpose() const
         {
             DynamicMatrix result(m_cols, m_rows);
