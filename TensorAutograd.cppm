@@ -218,6 +218,7 @@ export namespace kairo::foundation::math
     /// and rebuilds it only when backward receives an upstream gradient.
     /// Captured Variables and parameters must outlive the returned Variable.
     [[nodiscard]]
+    /// TEACHING IMPLEMENTATION: Checkpoint discards intermediate forward nodes and recomputes on backward; caller captures and parameter lifetimes remain live.
     inline Variable AutogradCheckpoint(std::function<Variable()> forward)
     {
         if (!forward)
