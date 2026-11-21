@@ -1,3 +1,9 @@
+// TEACHING MAP — KairoMath.cppm
+// C++23 umbrella exports Vector, Matrix, Quaternion, Transform and numerical/tensor tools.
+// Geometry, Renderer and PhysicsMath import these contracts; module imports do not
+// implicitly choose units or coordinate spaces.
+// Read READING_ORDER.md for math conventions, caller modules and related tests.
+
 export module Kairo.Foundation.Math;
 
 export import Kairo.Foundation.Math.Vector;
