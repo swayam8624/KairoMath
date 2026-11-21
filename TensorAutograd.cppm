@@ -1,3 +1,8 @@
+// TEACHING MODULE: Reverse-mode differentiation graph for Float32 Tensor values. Each Node
+// stores value, optional accumulated gradient, parents and backward rule.
+// Backward traverses a graph and applies chain rule; leaf lifetimes and
+// accumulation/zeroing control optimizer correctness. This is not arbitrary
+// symbolic differentiation nor a universal GPU autograd engine.
 module;
 
 #include <algorithm>
