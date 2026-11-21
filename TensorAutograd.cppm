@@ -34,6 +34,7 @@ namespace kairo::foundation::math::autograd_detail
         std::function<void(const Tensor<float>&)> backward;
     };
 
+    /// TEACHING API: Accumulate( — Sum gradient contributions into a node only when it requires gradients, validating rank and shape first.
     void Accumulate(const std::shared_ptr<Node>& node, const Tensor<float>& contribution)
     {
         if (!node->requiresGradient) return;
@@ -70,8 +71,10 @@ export namespace kairo::foundation::math
     [[nodiscard]] Variable AutogradGatherRows(
         const Variable&, std::span<const std::size_t>);
     [[nodiscard]] Variable AutogradGELU(const Variable&);
+    /// TEACHING API: AutogradMultiHeadCausalAttention( — Compute masked self-attention and backward gradients for query/key/value; head dimensions and causal mask constrain API shape.
     [[nodiscard]] Variable AutogradMultiHeadCausalAttention(
         const Variable&, const Variable&, const Variable&, std::size_t);
+    /// TEACHING API: AutogradCheckpoint( — Keep forward output but rebuild the interior graph during backward, trading extra compute for lower saved activation memory.
     [[nodiscard]] Variable AutogradCheckpoint(std::function<Variable()>);
     [[nodiscard]] Variable MeanSquaredLoss(const Variable&, const Tensor<float>&);
     [[nodiscard]] Variable SoftmaxCrossEntropyLoss(const Variable&, const Tensor<float>&);
@@ -100,6 +103,7 @@ export namespace kairo::foundation::math
             return state_->gradient;
         }
 
+        /// TEACHING API: ZeroGradient( — Clear accumulated gradient state before an independent optimization step; otherwise gradients intentionally accumulate.
         void ZeroGradient() noexcept
         {
             state_->gradient = Tensor<float>();
@@ -122,6 +126,7 @@ export namespace kairo::foundation::math
         /// Backpropagates an explicit upstream tensor through non-scalar
         /// outputs. This is primarily the boundary used by recomputation
         /// checkpoints and vector-Jacobian products.
+        /// TEACHING API: Backward( — Build reverse topological traversal from output and propagate chain-rule contributions through recorded parent edges.
         void Backward(const Tensor<float>& initialGradient) const
         {
             ValidateShape(initialGradient, "Backward");
@@ -153,6 +158,7 @@ export namespace kairo::foundation::math
         /// Output: the update is subtracted in place from the parameter value.
         /// Task: provide optimizers a checked mutation boundary without exposing
         /// the autograd node or its storage ownership.
+        /// TEACHING API: ApplyUpdate( — Mutate a leaf parameter only after exact tensor-shape validation; optimizers own learning-rate/state logic.
         void ApplyUpdate(const Tensor<float>& update)
         {
             ValidateShape(update, "ApplyUpdate");
