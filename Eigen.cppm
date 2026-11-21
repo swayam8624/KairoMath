@@ -1,3 +1,7 @@
+// TEACHING MODULE: Eigenvalue/eigenvector computation through power iteration, shifted
+// iteration, tridiagonal and QR methods. Iterative methods require convergence
+// criteria and symmetric/diagonalizable assumptions. SVD and PCA depend on
+// these routines, so check residual A*v-lambda*v and orthogonality.
 module;
 
 #include <algorithm>
