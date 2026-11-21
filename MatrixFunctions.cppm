@@ -1,3 +1,7 @@
+// TEACHING MODULE: Matrix exponential and related functions, distinct from applying a scalar
+// exponential to each element. MatrixOneNorm supplies scaling for numerical
+// stability; LinearSolve may be used in rational approximations. Dynamics and
+// differential systems can consume exp(A*t) under conditioning constraints.
 module;
 
 #include <cmath>
