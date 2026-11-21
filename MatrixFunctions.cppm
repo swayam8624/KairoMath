@@ -1,3 +1,9 @@
+// TEACHING MAP — MatrixFunctions.cppm
+// Higher-level matrix functions layered on core Matrix/DynamicMatrix arithmetic. Consumers
+// must respect shape, domain and numerical conditioning rather than treating
+// transformations as universally invertible.
+// See READING_ORDER.md for downstream APIs, numerical assumptions and tests.
+
 module;
 
 #include <cmath>

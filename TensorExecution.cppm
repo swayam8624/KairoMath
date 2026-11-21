@@ -1,3 +1,9 @@
+// TEACHING MAP — TensorExecution.cppm
+// Tensor computational operators and execution scheduling; TensorAutograd records reverse
+// dependencies and TensorGPU may route supported kernels to Metal. Validate tensor
+// shapes/dtypes and fallback.
+// See READING_ORDER.md for downstream APIs, numerical assumptions and tests.
+
 module;
 
 #include <algorithm>

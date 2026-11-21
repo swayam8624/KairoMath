@@ -1,3 +1,7 @@
+> **Read and learn the code:** [READING_ORDER.md](READING_ORDER.md) links the implementation/tests in a recommended order, with cross-file API questions and exercise guidance.
+>
+> **Open source:** Original KairoMath code is available under the [MIT license](LICENSE) for study, modification and further development. Third-party dependencies retain their own terms. This guide is a first documentation pass, not a certificate of complete function-level coverage.
+
 # KairoMath
 
 A high-performance engine-foundation 3D math and linear algebra library written in modern C++23. Built entirely on **C++20/C++23 Modules** for lightning-fast compilation, strict encapsulation, and clean symbol isolation.

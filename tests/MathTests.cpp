@@ -1,3 +1,9 @@
+// TEACHING MAP — tests/MathTests.cpp
+// Unit tests for vector, matrix, quaternion, transformations, numerical solvers and
+// distributions. Validate outputs with independent analytic expectations and explicit
+// tolerances.
+// Read READING_ORDER.md for related modules and verification expectations.
+
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <algorithm>

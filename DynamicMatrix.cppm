@@ -1,3 +1,8 @@
+// TEACHING MAP — DynamicMatrix.cppm
+// Heap-sized numerical matrix contract for linear system solvers, decompositions and
+// statistics. Contrast dimension and allocation checks with fixed-size graphics matrices.
+// Read READING_ORDER.md for math conventions, caller modules and related tests.
+
 module;
 
 #include <algorithm>

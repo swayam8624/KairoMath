@@ -1,3 +1,8 @@
+// TEACHING MAP — tests/TensorExecutionSmoke.cpp
+// Tests shape checking and forward tensor execution, including invalid operations and
+// reference numerical values.
+// Read READING_ORDER.md for related modules and verification expectations.
+
 #include <cmath>
 #include <cstddef>
 

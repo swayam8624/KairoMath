@@ -1,3 +1,9 @@
+// TEACHING MAP — Vector.cppm
+// Vec2/Vec3/Vec4 mathematical primitives. Consumers in Geometry, Spatial and PhysicsMath
+// rely on consistent handedness, normalization and finite-value/epsilon contracts; these
+// types are not GPU buffers.
+// Read READING_ORDER.md for math conventions, caller modules and related tests.
+
 module;
 
 #include <cassert>

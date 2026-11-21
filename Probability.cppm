@@ -1,3 +1,9 @@
+// TEACHING MAP — Probability.cppm
+// Probability distribution/sampling primitives, fed by deterministic PRNGs and consumed by
+// statistical modeling or ML. Random generator seeds and distribution assumptions
+// determine reproducibility.
+// See READING_ORDER.md for downstream APIs, numerical assumptions and tests.
+
 module;
 
 #include <algorithm>

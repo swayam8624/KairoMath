@@ -1,3 +1,9 @@
+// TEACHING MAP — Optimization.cppm
+// Optimization objectives, gradients or iterative solvers built atop numerical linear
+// algebra. Learn stopping tolerances, objective monotonicity and failure semantics before
+// using optimizers in fitting/ML.
+// See READING_ORDER.md for downstream APIs, numerical assumptions and tests.
+
 module;
 
 #include <algorithm>

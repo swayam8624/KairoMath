@@ -1,3 +1,9 @@
+// TEACHING MAP — Transform.cppm
+// Translation, rotation and scale composition used by scene graphs, renderer cameras and
+// rigid-body poses. A TRS transform is not always invertible under zero scale or arbitrary
+// shear.
+// Read READING_ORDER.md for math conventions, caller modules and related tests.
+
 module;
 
 #include <cassert>

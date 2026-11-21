@@ -1,3 +1,9 @@
+// TEACHING MAP — Matrix.cppm
+// Fixed-size matrix operations using row-major memory with column-vector multiplication
+// semantics. Transform and Renderer compose these; row-major storage must not be confused
+// with multiplication convention.
+// Read READING_ORDER.md for math conventions, caller modules and related tests.
+
 module;
 
 #include <array>

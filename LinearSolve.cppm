@@ -1,3 +1,9 @@
+// TEACHING MAP — LinearSolve.cppm
+// Solves linear systems using numerical factorization and pivoting;
+// Optimization/PhysicsMath depend on stable residual and singularity behavior.
+// Conditioning must be measured, not assumed from a non-null result.
+// Read READING_ORDER.md for math conventions, caller modules and related tests.
+
 module;
 
 #include <algorithm>

@@ -1,3 +1,9 @@
+// TEACHING MAP — Eigen.cppm
+// Eigen decomposition of supported matrices; consumers include PCA/Statistics, PhysicsMath
+// and numerical visualization. Verify symmetry assumptions, orthogonality, eigenpair
+// residuals and near-degenerate spectra.
+// See READING_ORDER.md for downstream APIs, numerical assumptions and tests.
+
 module;
 
 #include <algorithm>

@@ -1,3 +1,8 @@
+// TEACHING MAP — tests/TensorGPUSmoke.cpp
+// Compares GPU-supported operations against CPU scalar/tensor references on an actual host;
+// backend support depends on device/runtime availability.
+// Read READING_ORDER.md for related modules and verification expectations.
+
 #include <cmath>
 #include <cstddef>
 

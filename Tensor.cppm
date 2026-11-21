@@ -1,3 +1,9 @@
+// TEACHING MAP — Tensor.cppm
+// High-level multidimensional tensor API for ML operations; TensorData manages storage,
+// TensorExecution evaluates operations and TensorAutograd computes gradients. Shape, dtype
+// and device are explicit contracts.
+// See READING_ORDER.md for downstream APIs, numerical assumptions and tests.
+
 module;
 
 #include <algorithm>

@@ -1,3 +1,9 @@
+// TEACHING MAP — TensorGPU.cppm
+// Adapts supported Tensor storage/ops to KairoGPU or Metal compute while maintaining CPU
+// tensor semantics. Device capabilities and transfer/synchronization cost are separate from
+// mathematical correctness.
+// Read READING_ORDER.md for related modules and verification expectations.
+
 module;
 
 #include <cstddef>
