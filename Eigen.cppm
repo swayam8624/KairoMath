@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Eigenvalue/eigenvector computations used for spectral properties and downstream statistical/geometric
+// analysis; check symmetry assumptions and convergence tolerances.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <algorithm>

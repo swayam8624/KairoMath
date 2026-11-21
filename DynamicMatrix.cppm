@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Dynamically sized matrix representation used by decompositions, linear solvers and tensor interop.
+// Track dimensions, allocation, strides and singularity checks when consuming the API.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <algorithm>

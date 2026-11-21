@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Reverse-mode differentiation graph storing values, gradients, parent links and backward callbacks.
+// TensorTraining consumes gradients; validate shape, accumulation and graph lifetime.
+// See docs/SOURCE_READING_ORDER.md for the consumer chain and exercises.
+
 module;
 
 #include <algorithm>

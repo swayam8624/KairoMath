@@ -1,5 +1,7 @@
 # KairoMath
 
+> **Learn the implementation:** Follow the [linked source reading order](docs/SOURCE_READING_ORDER.md) to trace its types, APIs and downstream Kairo dependencies. Original project code and documentation are proposed under the [MIT License](LICENSE) for learning, reuse and further development. Third-party materials, if any, retain their own rights; review provenance before redistribution.
+
 A high-performance engine-foundation 3D math and linear algebra library written in modern C++23. Built entirely on **C++20/C++23 Modules** for lightning-fast compilation, strict encapsulation, and clean symbol isolation.
 
 `KairoMath` is designed to support high-performance game engines, CPU ray tracers, physics solvers, spatial indexing structures, and data science/robotics applications. It follows strict mathematical safety rules, avoids unnecessary runtime allocations, and maintains complete layout compatibility with GPU graphics APIs.

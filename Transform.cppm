@@ -1,3 +1,9 @@
+// TEACHING NOTE:
+// Translation/rotation/scale representation bridging KairoMath to EngineCore TransformComponent and
+// rendering/physics adapters. Determine local/world composition and scale handling at the consumer
+// boundary.
+// See docs/SOURCE_READING_ORDER.md for the consumer chain and exercises.
+
 module;
 
 #include <cassert>

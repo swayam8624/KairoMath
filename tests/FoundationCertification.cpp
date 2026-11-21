@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Certification checks for foundational numerical behavior across modules; preserve declared
+// tolerances and source inputs when interpreting claims.
+// See docs/SOURCE_READING_ORDER.md.
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cmath>

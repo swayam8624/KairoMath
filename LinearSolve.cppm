@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Solves linear systems on matrix data; Optimization and downstream physics/ML algorithms may rely on
+// numerical conditioning and explicit failure behavior.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <algorithm>

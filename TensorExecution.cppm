@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Tensor execution and backend selection layer: distinguish mathematical operations from CPU
+// scheduling and optional GPU execution.
+// See docs/SOURCE_READING_ORDER.md.
+
 module;
 
 #include <algorithm>

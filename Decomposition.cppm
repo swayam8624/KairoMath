@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Matrix factorization helpers consumed by LinearSolve, Eigen and SVD; preserve shape/conditioning
+// assumptions when interpreting results.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <algorithm>

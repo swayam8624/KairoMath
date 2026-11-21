@@ -1,3 +1,9 @@
+// TEACHING NOTE:
+// Matrix and transform algebra consumed by KairoGeometry, the renderer and KairoPhysicsMath. Check
+// row/column conventions, inverse preconditions and composition order rather than assuming external
+// API layout.
+// See docs/SOURCE_READING_ORDER.md for the consumer chain and exercises.
+
 module;
 
 #include <array>

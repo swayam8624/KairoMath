@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Umbrella module exporting narrow vector, matrix, quaternion, transform, tensor, linear algebra,
+// optimization and probability interfaces. Consumers can choose the umbrella or a smaller import.
+// See docs/SOURCE_READING_ORDER.md for the consumer chain and exercises.
+
 export module Kairo.Foundation.Math;
 
 export import Kairo.Foundation.Math.Vector;

@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Tests reverse-mode gradient propagation over Tensor operations; inspect shapes and gradient
+// accumulation, not only whether the graph executes.
+// See docs/SOURCE_READING_ORDER.md.
+
 #include <cmath>
 #include <cstddef>
 

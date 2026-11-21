@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Model optimization/training utilities consume Tensor values and TensorAutograd gradients. Check
+// gradient reset/update, optimizer state and minibatch assumptions.
+// See docs/SOURCE_READING_ORDER.md.
+
 module;
 
 #include <algorithm>

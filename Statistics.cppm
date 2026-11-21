@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Summary statistics and numerical estimators complement Probability and tensor/data pipelines; track
+// denominator conventions and numerical stability.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <algorithm>

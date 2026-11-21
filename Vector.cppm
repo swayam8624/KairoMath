@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Foundational vector operations consumed by Matrix, Quaternion, Transform, KairoGeometry and physics.
+// Confirm coordinate handedness, normalization behavior and precision for downstream calls.
+// See docs/SOURCE_READING_ORDER.md for the consumer chain and exercises.
+
 module;
 
 #include <cassert>

@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Probability distributions and random/statistical helpers, relevant to optimizer initialization,
+// sampling, and experiments; deterministic source seeds matter.
+// See docs/SOURCE_READING_ORDER.md for upstream and downstream modules.
+
 module;
 
 #include <algorithm>

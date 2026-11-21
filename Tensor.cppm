@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Tensor storage, dtype and shape operations used by TensorAutograd and TensorTraining. Execution/GPU
+// adapters may represent memory differently, so track ownership and conversion costs.
+// See docs/SOURCE_READING_ORDER.md for the consumer chain and exercises.
+
 module;
 
 #include <algorithm>

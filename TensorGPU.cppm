@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Optional GPU-oriented tensor operations and dispatch. Backend availability and device ownership are
+// distinct from Tensor shape/dtype semantics.
+// See docs/SOURCE_READING_ORDER.md.
+
 module;
 
 #include <cstddef>
