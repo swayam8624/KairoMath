@@ -1,3 +1,9 @@
+// TEACHING MAP — Quaternion.cppm
+// Rotation representation and interpolation operations consumed by Transform, scene
+// animation and physics orientation. Normalize and handle shortest-arc/near-degenerate
+// cases before using quaternion results.
+// Read READING_ORDER.md for math conventions, caller modules and related tests.
+
 module;
 
 #include <cassert>
