@@ -99,6 +99,7 @@ export namespace kairo::foundation::math
     template<typename T>
         requires std::floating_point<T>
     [[nodiscard]]
+    /// TEACHING API: ParallelSum — Independently compute range partials then combine them in ascending offset order; floating-point reductions depend on addition order.
     T ParallelSum(
         kairo::scheduler::Scheduler& scheduler,
         const Tensor<T>& input,
