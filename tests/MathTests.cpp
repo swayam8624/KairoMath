@@ -1,3 +1,8 @@
+// TEACHING NOTE:
+// Core unit tests check vector/matrix/quaternion/transform conventions; connect each assertion to the
+// originating public module contract.
+// See docs/SOURCE_READING_ORDER.md.
+
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <algorithm>
