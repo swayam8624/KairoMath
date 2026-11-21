@@ -1,3 +1,9 @@
+// TEACHING MAP — Statistics.cppm
+// Descriptive and inferential statistics built from numerical/probability foundations.
+// Consumers in dataset/benchmark analysis must distinguish sample from population
+// quantities and handle missing/degenerate inputs.
+// See READING_ORDER.md for downstream APIs, numerical assumptions and tests.
+
 module;
 
 #include <algorithm>
