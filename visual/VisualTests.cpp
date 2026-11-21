@@ -1,3 +1,9 @@
+// TEACHING MAP — visual/VisualTests.cpp
+// Visual demonstration of math, transformations and numerical behavior.
+// Rendered screenshots are illustrative evidence, not replacements for
+// tests/MathTests.cpp's independent numerical identities and edge cases.
+// Read READING_ORDER.md to trace module APIs and coordinate conventions.
+
 #include <iostream>
 #include <fstream>
 #include <vector>
