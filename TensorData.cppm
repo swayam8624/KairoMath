@@ -1,3 +1,8 @@
+// TEACHING MODULE: Dataset sample dimension is AXIS ZERO. Train/validation splits and
+// shuffles manipulate index order, preserving source tensor ownership.
+// BatchLoader returns contiguous batches; PrefetchLoader uses a bounded
+// jthread queue, cancellation and exception propagation. Keep validation
+// rows from leaking into training-time normalization/statistics.
 module;
 
 #include <algorithm>
