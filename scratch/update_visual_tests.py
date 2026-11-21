@@ -1,3 +1,9 @@
+# TEACHING LEGACY SCRIPT — NOT PART OF NORMAL BUILD: This is a historical
+# one-shot source-rewriting tool using a developer-specific absolute macOS path.
+# It may replace a large block in another .cpp file when run. Do not execute
+# blindly; the actual maintained visual source is visual/VisualTests.cpp.
+# Keep this script for historical study, not as a repeatable test workflow.
+
 import os
 
 cpp_file_path = "/Users/swayamsingal/Desktop/Programming/Kairo/Foundation/KairoMath/tests/VisualTests.cpp"
