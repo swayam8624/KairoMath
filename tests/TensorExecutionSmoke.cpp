@@ -1,3 +1,7 @@
+// TEACHING TEST FILE: Scheduler/SIMD tensor kernels are compared against scalar reference results
+// under a fixed worker/chunk configuration. A passing equality check does
+// not prove speedup or deadlock freedom at all workloads.
+
 #include <cmath>
 #include <cstddef>
 
