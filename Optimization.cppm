@@ -386,6 +386,7 @@ export namespace kairo::foundation::math
 
     template<FloatingPoint T, typename Objective, typename Gradient>
     [[nodiscard]]
+    /// TEACHING API: GradientDescent — Move against gradient with configured learning rate/Armijo backtracking; stop by value, gradient or step tolerance.
     OptimizationResult<T> GradientDescent(
         Objective&& objective,
         Gradient&& gradient,
@@ -531,6 +532,7 @@ export namespace kairo::foundation::math
 
     template<FloatingPoint T, typename Objective, typename Gradient>
     [[nodiscard]]
+    /// TEACHING API: Momentum — Maintain an exponentially smoothed velocity of gradients, changing the trajectory from plain descent.
     OptimizationResult<T> Momentum(
         Objective&& objective,
         Gradient&& gradient,
@@ -637,6 +639,7 @@ export namespace kairo::foundation::math
 
     template<FloatingPoint T, typename Objective, typename Gradient>
     [[nodiscard]]
+    /// TEACHING API: Nesterov — Evaluate gradient using anticipated momentum position rather than only current state.
     OptimizationResult<T> Nesterov(
         Objective&& objective,
         Gradient&& gradient,
@@ -746,6 +749,7 @@ export namespace kairo::foundation::math
 
     template<FloatingPoint T, typename Objective, typename Gradient>
     [[nodiscard]]
+    /// TEACHING API: Adam — Adapt coordinatewise steps with first/second moment estimates and bias correction; optimizer state must persist.
     OptimizationResult<T> Adam(
         Objective&& objective,
         Gradient&& gradient,
@@ -892,6 +896,7 @@ export namespace kairo::foundation::math
 
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: ConjugateGradientSolve — Iteratively solve symmetric positive-definite systems without explicit dense inversion; breakdown should be checked.
     ConjugateGradientResult<T> ConjugateGradientSolve(
         const DynamicMatrix<T>& A,
         const DynamicMatrix<T>& b,
@@ -1045,6 +1050,7 @@ export namespace kairo::foundation::math
 
     template<FloatingPoint T, typename Objective, typename Gradient, typename Hessian>
     [[nodiscard]]
+    /// TEACHING API: Newton — Use local curvature (Hessian system) to build a second-order update, with validity determined by Hessian conditioning.
     OptimizationResult<T> Newton(
         Objective&& objective,
         Gradient&& gradient,
@@ -1187,6 +1193,7 @@ export namespace kairo::foundation::math
 
     template<FloatingPoint T, typename Residual, typename Jacobian>
     [[nodiscard]]
+    /// TEACHING API: GaussNewton — Approximate least-squares Hessian by J^T*J, avoiding residual second derivatives.
     OptimizationResult<T> GaussNewton(
         Residual&& residual,
         Jacobian&& jacobian,
@@ -1352,6 +1359,7 @@ export namespace kairo::foundation::math
 
     template<FloatingPoint T, typename Residual, typename Jacobian>
     [[nodiscard]]
+    /// TEACHING API: LevenbergMarquardt — Damp Gauss-Newton normal equations so uncertain steps behave more like gradient descent.
     OptimizationResult<T> LevenbergMarquardt(
         Residual&& residual,
         Jacobian&& jacobian,
