@@ -1,3 +1,9 @@
+// TEACHING MAP — SVD.cppm
+// Singular value decomposition for rectangular and rank-deficient matrices, consumed by
+// least-squares/PCA. Rank thresholds and singular-value ordering are part of API
+// stability; compare reconstructed A=UΣVᵀ.
+// See READING_ORDER.md for downstream APIs, numerical assumptions and tests.
+
 module;
 
 #include <algorithm>
