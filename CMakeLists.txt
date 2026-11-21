@@ -1,3 +1,10 @@
+# TEACHING BUILD: KairoMath's C++23 module library compiles the math and
+# optional Tensor facilities. CTest/Catch2 and visualizer are separate targets.
+# KAIRO_MATH_USE_SCHEDULER resolves sibling Scheduler/SIMD modules for selected
+# TensorExecution kernels; KAIRO_MATH_USE_GPU resolves GPU for TensorGPU.
+# Those optional flags and native host dependencies are independent of the
+# default scalar Tensor API. Review exact build/test host before claiming pass.
+
 cmake_minimum_required(VERSION 3.28)
 project(Math LANGUAGES CXX)
 
