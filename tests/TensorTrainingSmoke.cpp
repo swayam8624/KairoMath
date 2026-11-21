@@ -1,3 +1,8 @@
+// TEACHING MAP — tests/TensorTrainingSmoke.cpp
+// Exercises small deterministic training steps, gradient updates, reproducibility and loss
+// behavior without implying full-scale model training.
+// Read READING_ORDER.md for related modules and verification expectations.
+
 #include <array>
 #include <cmath>
 #include <cstddef>
