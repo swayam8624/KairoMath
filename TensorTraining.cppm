@@ -1,3 +1,9 @@
+// TEACHING MAP — TensorTraining.cppm
+// Coordinates tensor loss, gradient accumulation and parameter updates for neural training.
+// TensorAutograd supplies derivatives; runtime and dataset modules own forward execution and
+// input batches.
+// Read READING_ORDER.md for related modules and verification expectations.
+
 module;
 
 #include <algorithm>
