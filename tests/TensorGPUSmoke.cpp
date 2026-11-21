@@ -1,3 +1,7 @@
+// TEACHING TEST FILE: Concrete KairoGPU Metal device test, comparing selected Add/MatMul outputs
+// with CPU reference and checking GPU backend tags. This requires a supported
+// Apple Metal host and cannot be inferred from CI without native execution.
+
 #include <cmath>
 #include <cstddef>
 
