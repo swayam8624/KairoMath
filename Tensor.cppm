@@ -1,3 +1,8 @@
+// TEACHING MODULE: N-dimensional tensors with row-major logical indexing and optional
+// strided views. Owned tensors are contiguous; views may share storage and
+// must not be passed to dense-only kernels without Contiguous(). Float16
+// and bfloat16 conversions are separate numeric representations. Backend tags
+// do not mean all computation paths are natively accelerated.
 module;
 
 #include <algorithm>
