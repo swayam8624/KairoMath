@@ -25,6 +25,7 @@ export namespace kairo::foundation::math
     /// without exposing callers to the implementation details of MatrixExp.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: MatrixOneNorm — Compute max absolute column sum; used as a scale estimate, not the Frobenius norm.
     T MatrixOneNorm(
         const DynamicMatrix<T>& matrix) noexcept
     {
@@ -63,6 +64,7 @@ export namespace kairo::foundation::math
     /// dense square matrices substantially better than a fixed Taylor series.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: MatrixExponential — Compute exp(A) as a matrix function using a stable approximation/scaling strategy; it is NOT elementwise exp.
     DynamicMatrix<T> MatrixExponential(
         const DynamicMatrix<T>& matrix)
     {
@@ -171,6 +173,7 @@ export namespace kairo::foundation::math
     /// API entry point.
     template<FloatingPoint T>
     [[nodiscard]]
+    /// TEACHING API: Exp — Convenience API forwards to matrix exponential so call sites avoid ambiguity with scalar std::exp.
     DynamicMatrix<T> Exp(
         const DynamicMatrix<T>& matrix)
     {
