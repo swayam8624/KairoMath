@@ -1,3 +1,8 @@
+// TEACHING TEST FILE: Standalone return-code test for reverse-mode derivatives, comparing selected
+// analytical gradients against central finite-difference approximations.
+// Finite-difference epsilon/tolerance are part of the test contract; they do
+// not establish arbitrary neural-network training correctness.
+
 #include <cmath>
 #include <cstddef>
 
