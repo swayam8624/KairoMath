@@ -1,3 +1,9 @@
+// TEACHING NOTE:
+// Rotation representation used by Transform and PhysicsMath orientation integration. Check
+// normalization and multiplication ordering when converting rotations to matrices or stepping angular
+// velocity.
+// See docs/SOURCE_READING_ORDER.md for the consumer chain and exercises.
+
 module;
 
 #include <cassert>
