@@ -1,18 +1,20 @@
 # KairoMath
 
-A high-performance engine-foundation 3D math and linear algebra library written in modern C++23. Built entirely on **C++20/C++23 Modules** for lightning-fast compilation, strict encapsulation, and clean symbol isolation.
+**Learn from source:** [From vectors to numerical computing](docs/MATH_FOUNDATIONS_WALKTHROUGH.md) · [Linked file-by-file reading order](docs/SOURCE_READING_ORDER.md)
 
-`KairoMath` is designed to support high-performance game engines, CPU ray tracers, physics solvers, spatial indexing structures, and data science/robotics applications. It follows strict mathematical safety rules, avoids unnecessary runtime allocations, and maintains complete layout compatibility with GPU graphics APIs.
+A C++23-module-based numerical foundation for engine geometry, graphics, simulation and selected tensor workflows. Build speed and numerical performance should be assessed with reproducible compiler and workload measurements.
+
+`KairoMath` is designed to support high-performance game engines, CPU ray tracers, physics solvers, spatial indexing structures, and data science/robotics applications. Its fixed-size vector, matrix and quaternion value types avoid heap allocation, while dynamic matrices and tensors own or share allocated storage. CPU memory layout and native GPU buffer layout must be checked separately.
 
 ---
 
 ## Why KairoMath?
 
-Most C++ math libraries (like GLM) are header-only and rely on massive, legacy preprocessor includes that bloat compile times. `KairoMath` leverages C++20 module partitions, enforcing a clean import boundary:
+KairoMath uses standard named C++23 module interfaces to separate numerical contracts and implementations; compilation benefits depend on the compiler, dependency graph and build setup:
 
-*   **Lightning Compile Times**: Module interfaces are compiled once into binary module interfaces (`.pcm`), bypassing the need to re-parse headers across translation units.
-*   **TRS Transform Paradigm**: Separation of Translation, Rotation (Quaternion), and Scale instead of using generic 4x4 matrices. This prevents floating-point drift, simplifies animation blending/interpolation (via SLerp), and provides clean editor ergonomics.
-*   **API Agnostic & Vulkan Ready**: Follows standard **row-major memory storage** (for direct pointer uploads via `.Data()`), **column-vector multiplication** ($v' = M \cdot v$), and **Vulkan-style projection conventions** (Z depth mapped to `[0, 1]`).
+*   **Module-aware Builds**: Named module interfaces can reuse compiled module artifacts, subject to toolchain support and actual build benchmarks.
+*   **TRS Transform Paradigm**: Separation of Translation, Rotation (Quaternion), and Scale instead of using generic 4x4 matrices. This supports animation blending/interpolation (via SLerp) and editor ergonomics, but does not eliminate all floating-point drift or shear from transform composition.
+*   **API Agnostic & Vulkan Ready**: Follows standard **row-major CPU memory storage** (native GPU uploads still require layout/packing checks), **column-vector multiplication** ($v' = M \cdot v$), and **Vulkan-style projection conventions** (Z depth mapped to `[0, 1]`).
 *   **Numerical Suite**: Built-in support for dynamically sized matrices, linear system solvers, matrix decompositions, eigenvalue solvers, SVD, PCA, regression, optimization, probability distributions, and deterministic sampling.
 *   **No Runtime Allocations for Core Geometry**: Geometry types (Vec/Mat/Quat) are trivially copyable, allocation-free, stack-allocated structs designed for cache-friendly access.
 
