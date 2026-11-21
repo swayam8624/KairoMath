@@ -24,6 +24,7 @@ export namespace kairo::foundation::math
     class TensorGPUExecutor final
     {
     public:
+        /// TEACHING API: explicit TensorGPUExecutor( — Require an available KairoGPU device; the caller retains device ownership and controls its lifetime.
         explicit TensorGPUExecutor(kairo::gpu::Device& device)
             : m_device(device)
         {
@@ -36,6 +37,7 @@ export namespace kairo::foundation::math
         /// Input: equal-shape contiguous Float32 tensors.
         /// Output: contiguous host Tensor tagged as GPU-produced.
         [[nodiscard]]
+        /// TEACHING API: Tensor<float> Add( — Upload contiguous Float32 operands, dispatch selected GPU addition and read back into host-owned Tensor.
         Tensor<float> Add(const Tensor<float>& lhs, const Tensor<float>& rhs)
         {
             RequireEqualContiguousShapes(lhs, rhs);
@@ -60,6 +62,7 @@ export namespace kairo::foundation::math
         /// Input: contiguous row-major matrices [M,K] and [K,N].
         /// Output: contiguous host matrix [M,N] tagged as GPU-produced.
         [[nodiscard]]
+        /// TEACHING API: Tensor<float> MatMul( — Upload row-major Float32 matrices, dispatch supported GPU matmul and read back; persistent GPU residency is not provided.
         Tensor<float> MatMul(const Tensor<float>& lhs, const Tensor<float>& rhs)
         {
             if (lhs.Rank() != 2 || rhs.Rank() != 2 || lhs.Dim(1) != rhs.Dim(0)
@@ -92,6 +95,7 @@ export namespace kairo::foundation::math
         kairo::gpu::Device& m_device;
 
         [[nodiscard]]
+        /// TEACHING API: kairo::gpu::BufferHandle CreateStorage( — Allocate a temporary native device buffer through KairoGPU, named for diagnostics; successful return does not imply persistent cache.
         kairo::gpu::BufferHandle CreateStorage(std::size_t byteSize, const char* debugName)
         {
             return m_device.CreateBuffer({
