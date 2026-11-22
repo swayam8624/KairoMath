@@ -4,7 +4,7 @@ A C++23 mathematical foundation: read scalar/vector invariants before algorithms
 
 Follow source links sequentially. For each API/function, identify its input contract, owning data structure, called modules, failure modes, outputs, test and downstream consumers.
 
-**Worked mathematical exercise:** [Pivoting, LUP factor reuse, orientation quaternions and SLerp with calculations](LINEAR_SOLVERS_AND_ROTATIONS_WORKED_LAB.md). Compare source behavior with a hand-derived answer before attempting performance improvements.
+**Worked tensor execution exercise:** [Trace shapes, views, CPU scheduling, SIMD and numerical parity end-to-end](TENSOR_EXECUTION_END_TO_END_LAB.md). Read this after Stage C source modules.\n\n**Worked mathematical exercise:** [Pivoting, LUP factor reuse, orientation quaternions and SLerp with calculations](LINEAR_SOLVERS_AND_ROTATIONS_WORKED_LAB.md). Compare source behavior with a hand-derived answer before attempting performance improvements.
 
 ## Read in this order
 
