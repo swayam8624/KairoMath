@@ -1,6 +1,6 @@
 # KairoMath
 
-**Learn from source:** [From vectors to numerical computing](docs/MATH_FOUNDATIONS_WALKTHROUGH.md) · [Linked file-by-file reading order](docs/SOURCE_READING_ORDER.md) · [Worked linear solve and quaternion laboratory](docs/LINEAR_SOLVERS_AND_ROTATIONS_WORKED_LAB.md)
+**Learn from source:** [From vectors to numerical computing](docs/MATH_FOUNDATIONS_WALKTHROUGH.md) · [Linked file-by-file reading order](docs/SOURCE_READING_ORDER.md) · [Worked linear solve and quaternion laboratory](docs/LINEAR_SOLVERS_AND_ROTATIONS_WORKED_LAB.md) · [End-to-end tensor scheduling, SIMD and layout lab](docs/TENSOR_EXECUTION_END_TO_END_LAB.md)
 
 A C++23-module-based numerical foundation for engine geometry, graphics, simulation and selected tensor workflows. Build speed and numerical performance should be assessed with reproducible compiler and workload measurements.
 
