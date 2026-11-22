@@ -198,6 +198,10 @@ export namespace kairo::foundation::math
         /// Output: normalized quaternion, or identity for near-zero input.
         /// Task: produce a unit quaternion suitable for rotation APIs.
         [[nodiscard]]
+        // For nonzero input, divide (x,y,z,w) by its Euclidean norm:
+        // a unit quaternion preserves lengths under rotation.
+        // This API deliberately returns identity for near-zero input;
+        // tests must distinguish that fallback from a valid orientation.
         Quaternion Normalized() const noexcept
         {
             const T inverseLength = LengthInverse();
@@ -212,6 +216,9 @@ export namespace kairo::foundation::math
         /// Input: this quaternion.
         /// Output: none; mutates this quaternion to unit length when possible.
         /// Task: in-place normalization for transform update paths.
+        // In-place twin of Normalized(): the caller's stored pose is
+        // overwritten, so use it only when this Quaternion is owned
+        // by the current transform/animation state.
         void Normalize() noexcept
         {
             const T inverseLength = LengthInverse();
@@ -396,6 +403,10 @@ export namespace kairo::foundation::math
     template<FloatingPoint T>
     [[nodiscard]]
     /// TEACHING API: Inverse — General quaternion inverse uses conjugate divided by squared norm, unlike cheap unit-only conjugation.
+    // Algebraic inverse q^-1=conjugate(q)/|q|^2. For a unit
+    // rotation, inverse is just conjugation; for nonunit inputs the
+    // squared-norm division matters. A near-zero input falls back
+    // to identity rather than dividing by an unsafe denominator.
     Quaternion<T> Inverse(const Quaternion<T>& quaternion) noexcept
     {
         const T lengthSquared = quaternion.LengthSquared();
@@ -413,6 +424,10 @@ export namespace kairo::foundation::math
     /// internally so callers cannot accidentally create garbage rotations.
     template<FloatingPoint T>
     [[nodiscard]]
+    // Encode axis-angle using sin(theta/2) for vector xyz and
+    // cos(theta/2) for scalar w. Normalize the supplied axis first;
+    // a zero axis maps to identity. Angles are in *radians*, not
+    // degrees from an inspector/UI widget.
     Quaternion<T> AxisAngle(const Vector3<T>& axis, T angleRadians) noexcept
     {
         const Vector3<T> normalizedAxis = SafeNormalize(axis);
@@ -513,6 +528,11 @@ export namespace kairo::foundation::math
     /// engine convention +X right, +Y up, and -Z forward.
     template<FloatingPoint T>
     [[nodiscard]]
+    // Construct an orthonormal camera/NPC basis from desired forward
+    // direction and an approximate up. Engine forward is -Z, so
+    // rotation columns are right, up, and -forward.
+    // If up and forward are collinear, select an orthogonal fallback;
+    // a zero forward direction returns identity.
     Quaternion<T> LookRotation(
         const Vector3<T>& forward,
         const Vector3<T>& up = Vector3<T>::Up()) noexcept
@@ -546,6 +566,12 @@ export namespace kairo::foundation::math
     template<FloatingPoint T>
     [[nodiscard]]
     /// TEACHING API: Rotate — Rotate a 3D vector by quaternion composition; normalized input is needed to preserve lengths.
+    // Embed v as pure quaternion (vx,vy,vz,0), compute q*v*q^-1.
+    // The fast path uses conjugate when |q| is near 1; the general
+    // path uses Inverse(q). This avoids scaling v for nonunit q.
+    // A zero quaternion uses Inverse's identity fallback, but the
+    // full product then yields zero: do not silently equate it with
+    // a valid no-rotation input.
     Vector3<T> Rotate(const Quaternion<T>& quaternion, const Vector3<T>& vector) noexcept
     {
         const T lengthSq = quaternion.LengthSquared();
@@ -624,6 +650,10 @@ export namespace kairo::foundation::math
     template<FloatingPoint T>
     [[nodiscard]]
     /// TEACHING API: ToMatrix3 — Convert normalized quaternion into a 3x3 rotation consistent with column-vector matrix multiplication.
+    // Normalize before conversion so the 3x3 matrix is a pure
+    // rotation (orthogonal, determinant near +1). KairoMath Matrix
+    // stores elements row-major but uses column-vector algebra:
+    // its columns represent transformed local basis directions.
     Matrix3<T> ToMatrix3(const Quaternion<T>& quaternion) noexcept
     {
         const Quaternion<T> q = quaternion.Normalized();
@@ -788,6 +818,10 @@ export namespace kairo::foundation::math
     template<FloatingPoint T>
     [[nodiscard]]
     /// TEACHING API: FromEuler — Convert ordered angle triplet (radians) to orientation; axis/order convention must agree with the editor/camera.
+    // Convert an ordered intrinsic XYZ/Tait-Bryan angle triplet to
+    // a normalized orientation. Editor sliders must use the same
+    // order and units; applying XYZ rotations in another order can
+    // yield a different 3D pose because rotations do not commute.
     Quaternion<T> FromEuler(const Vector3<T>& euler) noexcept
     {
         const T cx = std::cos(euler.x * T(0.5));
@@ -848,6 +882,10 @@ export namespace kairo::foundation::math
     template<FloatingPoint T>
     [[nodiscard]]
     /// TEACHING API: NLerp — Normalize a linear blend; cheaper than SLerp but does not keep constant angular speed.
+    // q and -q represent the same orientation. Flip rhs if their
+    // dot product is negative to interpolate along the shorter
+    // hemisphere; then normalize the linear blend. Cheap and
+    // smooth, but angular speed is not constant like spherical lerp.
     Quaternion<T> NLerp(const Quaternion<T>& lhs, const Quaternion<T>& rhs, T alpha) noexcept
     {
         Quaternion<T> end = rhs;
@@ -865,6 +903,11 @@ export namespace kairo::foundation::math
     template<FloatingPoint T>
     [[nodiscard]]
     /// TEACHING API: SLerp — Choose shortest quaternion hemisphere, use spherical interpolation, and fall back to NLerp near equal orientations.
+    // Choose the same shortest quaternion hemisphere, then weight
+    // endpoints with sin((1-t)*angle)/sin(angle) and
+    // sin(t*angle)/sin(angle). Near-identical orientations use NLerp
+    // to avoid dividing by tiny sin(angle). Tests should compare
+    // orientation, not raw signs of quaternion components.
     Quaternion<T> SLerp(const Quaternion<T>& lhs, const Quaternion<T>& rhs, T alpha) noexcept
     {
         Quaternion<T> end = rhs;
@@ -897,6 +940,9 @@ export namespace kairo::foundation::math
     /// by taking the absolute dot product.
     template<FloatingPoint T>
     [[nodiscard]]
+    // Orientation angle is 2*acos(|dot(normalized endpoints)|).
+    // Absolute dot correctly treats q and -q as the *same* rotation.
+    // The clamp protects acos against floating-point overshoot.
     T AngleBetween(const Quaternion<T>& lhs, const Quaternion<T>& rhs) noexcept
     {
         const T dot = Clamp(Dot(lhs.Normalized(), rhs.Normalized()), T(-1), T(1));
