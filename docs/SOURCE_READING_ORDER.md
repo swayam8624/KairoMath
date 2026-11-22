@@ -6,24 +6,60 @@ Follow source links sequentially. For each API/function, identify its input cont
 
 ## Read in this order
 
-1. [`CMakeLists.txt`](../CMakeLists.txt)
-2. [`KairoMath.cppm`](../KairoMath.cppm)
-3. [`Vector.cppm`](../Vector.cppm)
-4. [`Matrix.cppm`](../Matrix.cppm)
-5. [`Quaternion.cppm`](../Quaternion.cppm)
-6. [`Transform.cppm`](../Transform.cppm)
-7. [`DynamicMatrix.cppm`](../DynamicMatrix.cppm)
-8. [`LinearSolve.cppm`](../LinearSolve.cppm)
-9. [`Decomposition.cppm`](../Decomposition.cppm)
-10. [`Eigen.cppm`](../Eigen.cppm)
-11. [`SVD.cppm`](../SVD.cppm)
-12. [`Optimization.cppm`](../Optimization.cppm)
-13. [`Probability.cppm`](../Probability.cppm)
-14. [`Statistics.cppm`](../Statistics.cppm)
-15. [`Tensor.cppm`](../Tensor.cppm)
-16. [`TensorAutograd.cppm`](../TensorAutograd.cppm)
-17. [`TensorTraining.cppm`](../TensorTraining.cppm)
-18. [`tests`](../tests)
+The stages below are a *learning route*, not a claim about compiler build order.
+Follow the links and compare each module's actual imports against the CMake
+file set before changing module dependencies.
+
+### Stage A — Public API and geometry foundations
+
+1. [`CMakeLists.txt`](../CMakeLists.txt): what the build compiles and which backends are optional.
+2. [`KairoMath.cppm`](../KairoMath.cppm): understand `export module` versus `export import`; note exclusions.
+3. [`Vector.cppm`](../Vector.cppm): scalar concepts, norms, cross product, guards for near-zero input.
+4. [`Matrix.cppm`](../Matrix.cppm): row-major CPU storage versus column-vector multiplication; transforms/projections.
+5. [`Quaternion.cppm`](../Quaternion.cppm): rotation representation, normalization, hemisphere-aware interpolation.
+6. [`Transform.cppm`](../Transform.cppm): translate/rotate/scale composition; why shear cannot always fit in TRS.
+7. [`tests/MathTests.cpp`](../tests/MathTests.cpp): confirm vector/matrix/transform conventions.
+
+**Checkpoint:** demonstrate why `M * v` and `A * B * v` have their stated
+meaning, and identify a scale/rotation combination that cannot be inverted
+as another pure TRS object.
+
+### Stage B — Dynamic and numerical linear algebra
+
+8. [`DynamicMatrix.cppm`](../DynamicMatrix.cppm): buffer ownership, dimensions and bounds.
+9. [`LinearSolve.cppm`](../LinearSolve.cppm): direct solving, elimination and pivot assumptions.
+10. [`Decomposition.cppm`](../Decomposition.cppm): LU/LUP, QR, Cholesky and LDLT domains.
+11. [`Eigen.cppm`](../Eigen.cppm): eigenvectors and convergence checks.
+12. [`SVD.cppm`](../SVD.cppm): singular values, rank, pseudoinverse and conditioning.
+13. [`MatrixFunctions.cppm`](../MatrixFunctions.cppm): the matrix exponential versus scalar elementwise exponential.
+14. [`Optimization.cppm`](../Optimization.cppm): gradient methods and nonlinear solvers.
+15. [`Statistics.cppm`](../Statistics.cppm): sample axes, covariance/PCA and regression.
+16. [`Probability.cppm`](../Probability.cppm): random generators, distribution and seed assumptions.
+17. [`tests/FoundationCertification.cpp`](../tests/FoundationCertification.cpp): deterministic numerical campaigns.
+
+**Checkpoint:** solve a well-conditioned and an ill-conditioned system; distinguish
+a small residual from an accurate solution.
+
+### Stage C — Tensor storage, learning and hardware integration
+
+18. [`Tensor.cppm`](../Tensor.cppm): shapes, strides, views, contiguity and dtypes.
+19. [`TensorAutograd.cppm`](../TensorAutograd.cppm): reverse-mode graph, leaf gradients and backward rules.
+20. [`TensorTraining.cppm`](../TensorTraining.cppm): optimizer moments, learning-rate schedules and checkpoints.
+21. [`TensorData.cppm`](../TensorData.cppm): indexed datasets, batches, prefetch and worker lifetime.
+22. [`TensorExecution.cppm`](../TensorExecution.cppm): optional Scheduler/SIMD path, data races and reductions.
+23. [`TensorGPU.cppm`](../TensorGPU.cppm): optional KairoGPU upload, dispatch and readback path.
+24. [`tests/TensorAutogradSmoke.cpp`](../tests/TensorAutogradSmoke.cpp) and [`tests/TensorTrainingSmoke.cpp`](../tests/TensorTrainingSmoke.cpp): gradient and resume contracts.
+25. [`tests/TensorDataSmoke.cpp`](../tests/TensorDataSmoke.cpp), [`tests/TensorExecutionSmoke.cpp`](../tests/TensorExecutionSmoke.cpp), and [`tests/TensorGPUSmoke.cpp`](../tests/TensorGPUSmoke.cpp): validate only the available host paths.
+
+**Checkpoint:** distinguish logical shape from physical strides; verify a
+finite-difference gradient and document where CPU and GPU buffers live.
+
+### Stage D — Visual demonstration and study companion
+
+26. [`visual/VisualTests.cpp`](../visual/VisualTests.cpp): C++ test/visualizer entry point.
+27. [`visual/server.py`](../visual/server.py): Python gateway and subprocess boundary; keep it local.
+28. [`MATH_FOUNDATIONS_WALKTHROUGH.md`](MATH_FOUNDATIONS_WALKTHROUGH.md): conceptual explanations to reread while following the modules.
+29. Continue into the complete inventory below for every first-party test and script.
 
 ## How this repository interacts with others
 
