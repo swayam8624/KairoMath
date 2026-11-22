@@ -25,6 +25,11 @@ export namespace kairo::foundation::math
     template<FloatingPoint T>
     [[nodiscard]]
     /// TEACHING API: ForwardSubstitution — Solve Lx=b row by row; small diagonal entries make the triangular system singular/ill-conditioned.
+    // Solve L*x=b using already-computed x[0..i). The diagonal is the
+    // only unknown of row i: x[i]=(b[i]-sum_{j<i} Lij*xj)/Lii.
+    // Use a scale-dependent pivot threshold to reject a numerically
+    // unusable near-zero diagonal, not only a literal zero.
+    // KairoMath::LUP reuses this for many right-hand sides.
     std::vector<T> ForwardSubstitution(const DynamicMatrix<T>& L, const std::vector<T>& b)
     {
         if (L.Rows() != L.Columns())
@@ -71,6 +76,10 @@ export namespace kairo::foundation::math
     template<FloatingPoint T>
     [[nodiscard]]
     /// TEACHING API: BackwardSubstitution — Solve Ux=b from final row upward, respecting matrix size and near-zero pivot checks.
+    // Solve U*x=b from the final row toward row zero. Every x[j]
+    // with j>i is known when x[i] is computed. This is the second
+    // half of an LUP-backed solve and also completes GaussianElimination.
+    // The threshold scales with the triangular coefficients.
     std::vector<T> BackwardSubstitution(const DynamicMatrix<T>& U, const std::vector<T>& b)
     {
         if (U.Rows() != U.Columns())
@@ -117,6 +126,10 @@ export namespace kairo::foundation::math
     template<FloatingPoint T>
     [[nodiscard]]
     /// TEACHING API: RowEchelonForm — Gaussian elimination identifies pivot structure but is not an orthogonal decomposition.
+    // Find pivots and eliminate *below* them to produce row-echelon
+    // form. This is useful for rank/pivot inspection; it does not
+    // itself solve Ax=b or compute an orthogonal QR basis.
+    // Zero-column/pivot tolerance is relative to matrix scale.
     DynamicMatrix<T> RowEchelonForm(const DynamicMatrix<T>& A)
     {
         DynamicMatrix<T> M = A;
@@ -244,6 +257,12 @@ export namespace kairo::foundation::math
     template<FloatingPoint T>
     [[nodiscard]]
     /// TEACHING API: GaussianElimination — Solve Ax=b via pivoted elimination and back-substitution; use residual norms to judge accuracy.
+    // Solve Ax=b by forming [A|b]. At each column choose the
+    // available row with largest |coefficient| (partial pivoting),
+    // swap it into place, and eliminate below. Extract upper U and
+    // transformed RHS, then use BackwardSubstitution. Relative pivot
+    // cutoff rejects singular/near-singular input; a small residual
+    // alone does not establish good conditioning.
     std::vector<T> GaussianElimination(const DynamicMatrix<T>& A, const std::vector<T>& b)
     {
         if (A.Rows() != A.Columns())
@@ -278,6 +297,11 @@ export namespace kairo::foundation::math
             M(r, n) = b[r];
         }
 
+        // This is partial (row) pivoting: choose the largest *absolute*
+        // entry in the current column among remaining rows. Swapping
+        // the entire augmented row also permutes the RHS correctly.
+        // It reduces growth relative to no pivoting but is not a
+        // guarantee of low error on every badly conditioned matrix.
         // Gaussian elimination with partial pivoting
         for (std::size_t i = 0; i < n; ++i)
         {
@@ -334,6 +358,11 @@ export namespace kairo::foundation::math
     template<FloatingPoint T>
     [[nodiscard]]
     /// TEACHING API: GaussJordanElimination — Eliminate both above and below pivot to solve directly, at additional arithmetic cost.
+    // Unlike forward elimination + back substitution, reduce the
+    // full augmented matrix to RREF, then read x from its final
+    // column if the left side is identity. This performs extra
+    // elimination work and should be checked against the pivoted
+    // Gaussian solve on ill-conditioned systems.
     std::vector<T> GaussJordanElimination(const DynamicMatrix<T>& A, const std::vector<T>& b)
     {
         if (A.Rows() != A.Columns())
@@ -384,6 +413,9 @@ export namespace kairo::foundation::math
     template<FloatingPoint T>
     [[nodiscard]]
     /// TEACHING API: LinearSolve — Preferred high-level solve API for A*x=b; avoid explicitly forming inverse for routine systems.
+    // High-level one-RHS entry point calls GaussianElimination.
+    // For an already factorized matrix or many RHS columns, prefer
+    // reusing the LUP decomposition instead of redoing elimination.
     std::vector<T> LinearSolve(const DynamicMatrix<T>& A, const std::vector<T>& b)
     {
         return GaussianElimination(A, b);
@@ -392,6 +424,10 @@ export namespace kairo::foundation::math
     /// Solve A * X = B for multiple right-hand sides.
     template<FloatingPoint T>
     [[nodiscard]]
+    // For A*X=B, compute LUP(A) only once; for each column of B,
+    // apply permutation P to that RHS, forward-solve Ly=Pb, then
+    // backward-solve Ux=y. Factorization is shared across columns,
+    // reducing repeated work relative to independent full solves.
     DynamicMatrix<T> LinearSolve(const DynamicMatrix<T>& A, const DynamicMatrix<T>& B)
     {
         if (A.Rows() != A.Columns())
@@ -406,6 +442,9 @@ export namespace kairo::foundation::math
         const std::size_t n = A.Rows();
         const std::size_t rhsCount = B.Columns();
 
+        // The one-time decomposition encodes permutation, lower and
+        // upper factors. Each right-hand side reuses them instead of
+        // repeating an O(n^3) factorization.
         LUPResult<T> lup = LUP(A);
         DynamicMatrix<T> result(n, rhsCount);
 
@@ -433,6 +472,10 @@ export namespace kairo::foundation::math
     template<FloatingPoint T>
     [[nodiscard]]
     /// TEACHING API: Inverse — Compute dynamic matrix inverse through linear solves; numerical stability depends on conditioning.
+    // Form inverse columns by solving A*x=e_j for each identity
+    // column, reusing one LUP factorization. For a routine Ax=b
+    // request, avoid computing all columns of inverse: it costs more
+    // and may amplify floating-point error without improving x.
     DynamicMatrix<T> Inverse(const DynamicMatrix<T>& A)
     {
         if (A.Rows() != A.Columns())
