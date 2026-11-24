@@ -445,7 +445,7 @@ export namespace kairo::foundation::math
     /// TEACHING API: Inverse — Requires nonzero UNIFORM scale: nonuniform scale plus rotation generally cannot be represented by an exact inverse TRS.
     Transform<T> Inverse(const Transform<T>& transform)
     {
-        const T eps = std::numeric_limits<T>::epsilon() * T(10);
+        [[maybe_unused]] const T eps = std::numeric_limits<T>::epsilon() * T(10);
         assert(std::abs(transform.Scale.x) > eps);
         assert(std::abs(transform.Scale.y) > eps);
         assert(std::abs(transform.Scale.z) > eps);
